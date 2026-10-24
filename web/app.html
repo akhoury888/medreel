@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MedReel — social videos for physicians</title>
+<meta name="description" content="Record a talking-head video in Arabic, English or French. MedReel edits it with captions, cardiology animations and your branding.">
+<link rel="icon" href="/static/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Arabic:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#FFF7F5; --grid:#F7DEE0; --grid-major:#F0C9CD; --ink:#1B2438; --steel:#5D6B82; --line:#EAD7D8;
+  --artery:#C8233A; --artery-dark:#A11B2E; --white:#fff; --ok:#1F7A52; --warn:#9A5B00; --wash:#FDEDEE;
+  --font:"IBM Plex Sans","IBM Plex Sans Arabic",system-ui,sans-serif; --display:"IBM Plex Sans Condensed","IBM Plex Sans Arabic",sans-serif;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 var(--font)}
+.paper{background-color:var(--paper);background-image:
+  linear-gradient(var(--grid-major) 1px,transparent 1px),linear-gradient(90deg,var(--grid-major) 1px,transparent 1px),
+  linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:40px 40px,40px 40px,8px 8px,8px 8px}
+a{color:var(--artery-dark)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--artery);outline-offset:2px}
+h1,h2,h3{font-family:var(--display);line-height:1.08;margin:0;letter-spacing:-.01em}
+h1{font-size:clamp(40px,6.2vw,76px);font-weight:700}
+h2{font-size:clamp(28px,3.4vw,40px);font-weight:700}
+h3{font-size:21px;font-weight:600}
+p{margin:0}
+.wrap{max-width:1160px;margin:0 auto;padding:0 24px}
+.muted{color:var(--steel)}
+.small{font-size:14px}
+.hide{display:none!important}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1.5px solid var(--ink);background:var(--white);color:var(--ink);
+  padding:11px 20px;border-radius:999px;font-weight:600;cursor:pointer;text-decoration:none;line-height:1.2}
+.btn:hover{background:var(--wash)}
+.btn.red{background:var(--artery);border-color:var(--artery);color:#fff}
+.btn.red:hover{background:var(--artery-dark);border-color:var(--artery-dark)}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:rgba(27,36,56,.06)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sm{padding:7px 14px;font-size:14px}
+
+/* nav */
+nav.top{position:sticky;top:0;z-index:20;background:rgba(255,247,245,.92);backdrop-filter:blur(6px);border-bottom:1px solid var(--line)}
+nav.top .wrap{display:flex;align-items:center;gap:14px;height:64px}
+.logo{display:flex;align-items:center;gap:10px;font:700 21px var(--display);color:var(--ink);text-decoration:none}
+.logo svg{width:30px;height:30px}
+nav.top .sp{flex:1}
+nav.top a.nl{color:var(--ink);text-decoration:none;font-weight:500;padding:8px 10px;border-radius:8px}
+nav.top a.nl:hover,nav.top a.nl.on{background:rgba(27,36,56,.06)}
+
+/* landing */
+.hero{position:relative;overflow:hidden;border-bottom:1px solid var(--grid-major)}
+.hero .wrap{display:grid;grid-template-columns:1.25fr .75fr;gap:48px;align-items:center;padding-top:64px;padding-bottom:110px}
+.hero p.lead{font-size:20px;max-width:34em;margin:24px 0 32px;color:#2C3854}
+.hero .ctas{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.trace{position:absolute;left:0;right:0;bottom:6px;height:90px;pointer-events:none;opacity:.9}
+.trace path{fill:none;stroke:var(--artery);stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round;stroke-dasharray:2600;stroke-dashoffset:2600;animation:draw 2.6s .2s ease-out forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+@media (prefers-reduced-motion:reduce){.trace path{animation:none;stroke-dashoffset:0}}
+.hero h1,.hero p,.hero .ctas,.phone{position:relative}
+.phone{justify-self:center;width:min(300px,80vw);aspect-ratio:9/16;border-radius:36px;background:var(--ink);padding:10px;box-shadow:0 30px 60px -20px rgba(27,36,56,.45)}
+.phone img{width:100%;height:100%;object-fit:cover;border-radius:28px;display:block}
+.phone .badge{position:absolute;left:-28px;bottom:48px;background:var(--white);border:1.5px solid var(--ink);border-radius:14px;padding:10px 14px;font-size:14px;max-width:210px}
+.phone .badge b{display:block;font-family:var(--display);font-size:17px}
+section.block{padding:84px 0;border-bottom:1px solid var(--line)}
+section.block>.wrap>p.intro{max-width:40em;margin:14px 0 40px;font-size:18px;color:#2C3854}
+.ways{display:grid;grid-template-columns:repeat(2,1fr);gap:0;border:1.5px solid var(--ink);border-radius:20px;overflow:hidden;background:var(--white)}
+.way{padding:28px;border-right:1.5px solid var(--ink);border-bottom:1.5px solid var(--ink);display:grid;grid-template-columns:52px 1fr;gap:16px}
+.way:nth-child(2n){border-right:0}.way:nth-child(n+3){border-bottom:0}
+.way svg{width:52px;height:52px}
+.way p{margin-top:6px;color:#2C3854}
+.langs{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.lang{background:var(--ink);color:#fff;border-radius:18px;padding:22px 22px 26px;min-height:170px;display:flex;flex-direction:column;justify-content:space-between}
+.lang small{color:#AEB8CC}
+.lang .cap{font:600 23px/1.35 var(--font);margin-top:18px}
+.lang .cap mark{background:#2EA0FF;color:#fff;border-radius:6px;padding:0 6px}
+.lang[dir=rtl] .cap{font-family:"IBM Plex Sans Arabic",sans-serif;font-size:25px}
+.does{display:grid;grid-template-columns:repeat(3,1fr);gap:28px 40px}
+.does div{border-top:3px solid var(--artery);padding-top:14px}
+.does p{margin-top:6px;color:#2C3854}
+.safe{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start}
+.safe ul{margin:0;padding:0;list-style:none}
+.safe li{padding:14px 0;border-bottom:1px solid var(--line)}
+.safe li b{display:block}
+.plans{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.plan{background:var(--white);border:1.5px solid var(--line);border-radius:18px;padding:24px;display:flex;flex-direction:column;gap:14px}
+.plan.feat{border-color:var(--ink);box-shadow:6px 6px 0 var(--ink)}
+.plan .price{font:700 44px var(--display)}
+.plan .price small{font:500 15px var(--font);color:var(--steel)}
+.plan ul{margin:0;padding:0 0 0 18px;flex:1}
+.plan li{margin:4px 0}
+.plan .cur{font-size:14px;font-weight:600;color:var(--ok)}
+footer{padding:40px 0 60px;color:var(--steel);font-size:14px}
+footer .wrap{display:flex;gap:24px;flex-wrap:wrap;justify-content:space-between}
+
+/* auth */
+.authbox{max-width:440px;margin:64px auto;background:var(--white);border:1.5px solid var(--ink);border-radius:20px;padding:32px}
+.authbox h2{margin-bottom:6px}
+label.f{display:block;font-weight:600;font-size:14px;margin-top:16px}
+label.f input,label.f select,label.f textarea{display:block;width:100%;margin-top:6px;padding:11px 13px;border:1.5px solid #D9C7C9;border-radius:12px;background:#fff;font-weight:400;font-size:16px}
+label.f input:focus,label.f select:focus,label.f textarea:focus{border-color:var(--ink);outline:none}
+label.f .hint{display:block;font-weight:400;color:var(--steel);font-size:13px;margin-top:4px}
+.err{background:#FDE8EA;border:1px solid #F1B7BF;color:#7F1424;padding:10px 12px;border-radius:10px;margin-top:14px;font-size:14px}
+.okmsg{background:#E7F5EE;border:1px solid #B5DEC9;color:#11583A;padding:10px 12px;border-radius:10px;margin-top:14px;font-size:14px;word-break:break-word}
+
+/* app */
+.page{padding:36px 0 80px}
+.page-head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:28px}
+.page-head .sp{flex:1}
+.meter{min-width:260px}
+.meter .bar{height:10px;background:#F2DCDE;border-radius:99px;overflow:hidden;margin-top:6px}
+.meter .bar i{display:block;height:100%;background:var(--ink);border-radius:99px}
+.grid-v{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:18px}
+.vid{background:var(--white);border:1.5px solid var(--line);border-radius:16px;overflow:hidden;text-decoration:none;color:var(--ink);display:flex;flex-direction:column}
+.vid:hover{border-color:var(--ink)}
+.vid .th{aspect-ratio:9/12;background:var(--ink);position:relative;display:flex;align-items:center;justify-content:center;color:#AEB8CC}
+.vid .th img{width:100%;height:100%;object-fit:cover}
+.vid .st{position:absolute;left:10px;top:10px;background:rgba(255,255,255,.95);border-radius:99px;padding:3px 10px;font-size:12px;font-weight:600}
+.vid .st.processing{background:#FFF3D6;color:var(--warn)}.vid .st.error{background:#FDE8EA;color:var(--artery-dark)}.vid .st.ready{color:var(--ok)}
+.vid .meta{padding:12px 14px}
+.vid .meta b{display:block;font-weight:600;line-height:1.3;max-height:2.6em;overflow:hidden}
+.vid .prog{height:4px;background:#F2DCDE}.vid .prog i{display:block;height:100%;background:var(--artery)}
+.empty{border:2px dashed var(--grid-major);border-radius:20px;padding:56px 24px;text-align:center;background:rgba(255,255,255,.6)}
+.empty h3{margin-bottom:8px}
+
+/* wizard */
+.choose{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.opt{background:var(--white);border:1.5px solid var(--line);border-radius:16px;padding:18px;cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:8px}
+.opt:hover{border-color:var(--steel)}
+.opt[aria-pressed=true]{border-color:var(--ink);box-shadow:4px 4px 0 var(--ink)}
+.opt svg{width:40px;height:40px}
+.opt b{font-family:var(--display);font-size:19px;line-height:1.15}
+.opt span{font-size:14px;color:var(--steel)}
+.panel{background:var(--white);border:1.5px solid var(--line);border-radius:18px;padding:24px;margin-top:20px}
+.panel>h3{margin-bottom:14px}
+input[type=range]{accent-color:var(--ink);width:100%}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.chip{border:1.5px solid var(--line);background:#fff;border-radius:99px;padding:6px 13px;font-size:14px;cursor:pointer}
+.chip[aria-pressed=true]{border-color:var(--ink);background:var(--ink);color:#fff}
+.chip:hover{border-color:var(--steel)}
+.drop{border:2px dashed #D9C7C9;border-radius:16px;padding:34px;text-align:center;cursor:pointer;background:#FFFCFB}
+.drop.on,.drop:hover{border-color:var(--ink);background:#fff}
+textarea.script{min-height:220px;line-height:1.6;resize:vertical}
+.writer{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:end}
+.tp{display:grid;grid-template-columns:minmax(260px,360px) 1fr;gap:24px;align-items:start}
+.cam{position:relative;aspect-ratio:9/16;background:#111;border-radius:22px;overflow:hidden}
+.cam video{width:100%;height:100%;object-fit:cover;display:block}
+.cam video.mirror{transform:scaleX(-1)}
+.cam .prompter{position:absolute;left:0;right:0;top:0;height:46%;background:linear-gradient(rgba(0,0,0,.72),rgba(0,0,0,.55) 80%,transparent);overflow:hidden;padding:18px 18px 0;color:#fff}
+.cam .prompter div{font-weight:600;line-height:1.5;white-space:pre-wrap}
+.cam .count{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 120px var(--display);color:#fff;text-shadow:0 4px 30px rgba(0,0,0,.6)}
+.cam .rec{position:absolute;right:14px;bottom:14px;background:var(--artery);color:#fff;border-radius:99px;padding:4px 10px;font-size:13px;font-weight:600}
+.status{margin-top:22px;background:var(--white);border:1.5px solid var(--ink);border-radius:18px;padding:22px}
+.status .bar{height:10px;background:#F2DCDE;border-radius:99px;overflow:hidden;margin:12px 0 8px}
+.status .bar i{display:block;height:100%;background:var(--artery);transition:width .5s}
+.notice{background:#EEF3FB;border:1px solid #CBD7EA;border-radius:12px;padding:12px 14px;font-size:14px;margin-top:14px}
+.settings{display:grid;grid-template-columns:220px 1fr;gap:32px}
+.settings aside a{display:block;padding:9px 12px;border-radius:10px;color:var(--ink);text-decoration:none;font-weight:500}
+.settings aside a:hover{background:rgba(27,36,56,.06)}
+.settings section{background:var(--white);border:1.5px solid var(--line);border-radius:18px;padding:24px;margin-bottom:20px}
+.colors{display:flex;gap:16px}
+.colors input[type=color]{width:64px;height:42px;padding:2px;border-radius:10px}
+.logo-prev{display:flex;align-items:center;gap:14px;margin-top:10px}
+.logo-prev img{width:64px;height:64px;object-fit:contain;border:1px solid var(--line);border-radius:12px;background:#fff}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:12px;z-index:50;max-width:92vw;display:none}
+@media (max-width:900px){
+  .hero .wrap{grid-template-columns:1fr;padding-top:40px}
+  .phone .badge{left:auto;right:-10px}
+  .ways,.langs,.does,.safe,.plans,.choose,.row2,.tp,.settings{grid-template-columns:1fr}
+  .way{border-right:0!important;border-bottom:1.5px solid var(--ink)!important}.way:last-child{border-bottom:0!important}
+  .plans{grid-template-columns:1fr 1fr}
+  .writer{grid-template-columns:1fr}
+  nav.top a.nl.hm{display:none}
+}
+@media (max-width:560px){.plans{grid-template-columns:1fr}.wrap{padding:0 16px}}
+</style>
+</head>
+<body>
+<nav class="top"><div class="wrap">
+  <a class="logo" href="#/"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#1B2438"/><path d="M3 18h7l2.5-7 4 13 3-9 1.5 3H29" fill="none" stroke="#E0475B" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>MedReel</a>
+  <div class="sp"></div>
+  <span id="navOut"><a class="nl hm" href="#/pricing">Pricing</a><a class="nl" href="#/login">Sign in</a><a class="btn red sm" href="#/signup">Start free</a></span>
+  <span id="navIn" class="hide"><a class="nl" data-n="dashboard" href="#/dashboard">My videos</a><a class="nl hm" data-n="billing" href="#/billing">Plan</a><a class="nl hm" data-n="settings" href="#/settings">Settings</a><a class="btn red sm" href="#/new">New video</a></span>
+</div></nav>
+<main id="view"></main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<template id="t-landing">
+<header class="hero paper">
+  <svg class="trace" viewBox="0 0 1600 120" preserveAspectRatio="none" aria-hidden="true"><path d="M0 70 H260 l14 -10 14 10 H330 l10 18 12 -80 14 92 10 -30 H520 l18 -14 18 14 H760 H900 l14 -10 14 10 H970 l10 18 12 -80 14 92 10 -30 H1160 l18 -14 18 14 H1600"/></svg>
+  <div class="wrap">
+    <div>
+      <h1>You record.<br>MedReel edits it like an agency would.</h1>
+      <p class="lead">Talk to the camera in Arabic, English or French. MedReel removes the pauses and false starts, adds captions and cardiology animations that match what you say, and puts your branding on it. Ready for Reels, TikTok and Shorts.</p>
+      <div class="ctas"><a class="btn red" href="#/signup">Make your first video free</a><a class="btn" href="#/pricing">See plans</a></div>
+      <p class="small muted" style="margin-top:14px">One free video every month. No card needed.</p>
+    </div>
+    <div class="phone"><img src="/static/hero-ct.jpg" alt="Edited vertical video showing a cardiac CT slice with coronary calcium highlighted and the calcium score categories"><div class="badge"><b>Calcium score</b>Animation added automatically when the doctor said “calcium”.</div></div>
+  </div>
+</header>
+
+<section class="block"><div class="wrap">
+  <h2>Four ways to make a video</h2>
+  <p class="intro">Start from whatever you have: a recording, a script, a topic, or nothing but an idea.</p>
+  <div class="ways">
+    <div class="way"><svg viewBox="0 0 52 52" aria-hidden="true"><rect x="13" y="4" width="26" height="44" rx="6" fill="none" stroke="#1B2438" stroke-width="2.5"/><circle cx="26" cy="22" r="7" fill="#C8233A"/></svg><div><h3>Upload a recording</h3><p>Film yourself on your phone. MedReel transcribes it, cuts the dead air and retakes, and builds the edit.</p></div></div>
+    <div class="way"><svg viewBox="0 0 52 52" aria-hidden="true"><rect x="6" y="8" width="24" height="36" rx="4" fill="none" stroke="#1B2438" stroke-width="2.5"/><path d="M11 17h14M11 24h14M11 31h9" stroke="#1B2438" stroke-width="2.5" stroke-linecap="round"/><rect x="30" y="18" width="16" height="26" rx="4" fill="#C8233A"/></svg><div><h3>Recording plus your script</h3><p>Captions use your exact words, even in dialect. The script is only matched to your voice for timing.</p></div></div>
+    <div class="way"><svg viewBox="0 0 52 52" aria-hidden="true"><rect x="9" y="6" width="34" height="40" rx="6" fill="none" stroke="#1B2438" stroke-width="2.5"/><path d="M15 14h22M15 20h22M15 26h14" stroke="#C8233A" stroke-width="2.5" stroke-linecap="round"/><circle cx="26" cy="37" r="4" fill="#1B2438"/></svg><div><h3>Write and record here</h3><p>Describe a topic, get a draft script to check and adjust, then read it from the teleprompter while your camera records.</p></div></div>
+    <div class="way"><svg viewBox="0 0 52 52" aria-hidden="true"><path d="M4 30h10l4-10 6 20 5-14 3 4h16" fill="none" stroke="#C8233A" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="8" width="44" height="36" rx="6" fill="none" stroke="#1B2438" stroke-width="2.5"/></svg><div><h3>No filming</h3><p>Turn a script into an animated video with an AI narrator. Clearly labelled as an AI voice, never a copy of yours.</p></div></div>
+  </div>
+</div></section>
+
+<section class="block"><div class="wrap">
+  <h2>Arabic, English and French</h2>
+  <p class="intro">Spoken Lebanese Arabic, French and English, with right-to-left captions and medical labels in the language of the video.</p>
+  <div class="langs">
+    <div class="lang" dir="rtl" lang="ar"><small>العربية · لهجة لبنانية</small><div class="cap">لما الكوليسترول يتجمّع، <mark>بيضيّق</mark> الشريان شوي شوي.</div></div>
+    <div class="lang" lang="en"><small>English</small><div class="cap">When cholesterol builds up, it <mark>narrows</mark> the artery.</div></div>
+    <div class="lang" lang="fr"><small>Français</small><div class="cap">Quand le cholestérol s’accumule, il <mark>rétrécit</mark> l’artère.</div></div>
+  </div>
+</div></section>
+
+<section class="block paper"><div class="wrap">
+  <h2>What the editor does for you</h2>
+  <p class="intro">The same work a video agency does, in a few minutes per video.</p>
+  <div class="does">
+    <div><h3>Clean cuts</h3><p>Pauses, false starts and filler words removed. Fillers wait for your approval.</p></div>
+    <div><h3>Captions that move</h3><p>Word-by-word captions with medical terms highlighted, kept clear of your face.</p></div>
+    <div><h3>Cardiology animations</h3><p>Plaque, clot, stent, ECG, blood pressure and calcium score, timed to your words.</p></div>
+    <div><h3>Your branding</h3><p>Name card, logo, colours and an end card with your booking link.</p></div>
+    <div><h3>Change it by asking</h3><p>“Make the subtitles more dynamic” or “remove the pause at 30 seconds”.</p></div>
+    <div><h3>Studio sound</h3><p>Noise reduction, levelling to social-media loudness and background music that ducks under your voice.</p></div>
+  </div>
+</div></section>
+
+<section class="block"><div class="wrap safe">
+  <div><h2>Made for medical content</h2><p class="muted" style="margin-top:14px;max-width:30em">You stay the presenter and the one who decides what gets published.</p></div>
+  <ul>
+    <li><b>Claims flagged for your review</b>Overstated wording such as guarantees, “100%” or “cures” is highlighted before you export.</li>
+    <li><b>Your face and voice are never faked</b>Edits use your real footage. AI narration is a separate, labelled option.</li>
+    <li><b>Your recordings stay yours</b>Originals are never modified. Delete a video, or your whole account, at any time.</li>
+  </ul>
+</div></section>
+
+<section class="block" id="pricing"><div class="wrap">
+  <h2>Plans</h2>
+  <p class="intro">Pay monthly, cancel anytime. A video is one finished edit, including all the changes and exports you make to it.</p>
+  <div class="plans" id="landingPlans"></div>
+</div></section>
+<footer><div class="wrap"><span>MedReel</span><span>Educational content tools for physicians. Not a medical device.</span></div></footer>
+</template>
+
+<template id="t-login">
+<div class="wrap"><form class="authbox" id="loginForm" novalidate>
+  <h2>Sign in</h2><p class="muted">Welcome back.</p>
+  <label class="f">Email<input name="email" type="email" autocomplete="email" required></label>
+  <label class="f">Password<input name="password" type="password" autocomplete="current-password" required></label>
+  <div class="err hide" data-err></div>
+  <button class="btn red" style="width:100%;margin-top:22px">Sign in</button>
+  <p class="small" style="margin-top:16px"><a href="#/forgot">Forgot your password?</a> · <a href="#/signup">Create an account</a></p>
+</form></div>
+</template>
+
+<template id="t-signup">
+<div class="wrap"><form class="authbox" id="signupForm" novalidate>
+  <h2>Create your account</h2><p class="muted">Your first video each month is free.</p>
+  <label class="f">Name as it should appear on your videos<input name="name" autocomplete="name" placeholder="Dr. Antoine El Khoury" required></label>
+  <label class="f">Specialty<input name="specialty" value="Cardiology"></label>
+  <label class="f">Email<input name="email" type="email" autocomplete="email" required></label>
+  <label class="f">Password<input name="password" type="password" autocomplete="new-password" minlength="10" required><span class="hint">At least 10 characters.</span></label>
+  <div class="err hide" data-err></div>
+  <button class="btn red" style="width:100%;margin-top:22px">Create account</button>
+  <p class="small" style="margin-top:16px">Already have an account? <a href="#/login">Sign in</a></p>
+</form></div>
+</template>
+
+<template id="t-forgot">
+<div class="wrap"><form class="authbox" id="forgotForm" novalidate>
+  <h2>Reset your password</h2><p class="muted">We'll email you a link that works for one hour.</p>
+  <label class="f">Email<input name="email" type="email" autocomplete="email" required></label>
+  <div class="err hide" data-err></div><div class="okmsg hide" data-ok></div>
+  <button class="btn red" style="width:100%;margin-top:22px">Send reset link</button>
+  <p class="small" style="margin-top:16px"><a href="#/login">Back to sign in</a></p>
+</form></div>
+</template>
+
+<template id="t-reset">
+<div class="wrap"><form class="authbox" id="resetForm" novalidate>
+  <h2>Choose a new password</h2>
+  <label class="f">New password<input name="password" type="password" autocomplete="new-password" minlength="10" required><span class="hint">At least 10 characters.</span></label>
+  <div class="err hide" data-err></div>
+  <button class="btn red" style="width:100%;margin-top:22px">Save password</button>
+</form></div>
+</template>
+
+<template id="t-dashboard">
+<div class="wrap page">
+  <div class="page-head">
+    <div><h2 id="hello">Your videos</h2><p class="muted" id="planLine"></p></div>
+    <div class="sp"></div>
+    <div class="meter"><div class="small"><b id="useNum"></b> <span class="muted">videos used this month</span></div><div class="bar"><i id="useBar"></i></div></div>
+    <a class="btn red" href="#/new">New video</a>
+  </div>
+  <div id="vids"></div>
+</div>
+</template>
+
+<template id="t-new">
+<div class="wrap page">
+  <div class="page-head"><div><h2>New video</h2><p class="muted" id="newQuota"></p></div></div>
+  <h3 style="margin-bottom:12px">How do you want to make it?</h3>
+  <div class="choose" id="modes" role="group" aria-label="Creation mode">
+    <button class="opt" data-mode="auto_edit" aria-pressed="true"><svg viewBox="0 0 52 52" aria-hidden="true"><rect x="13" y="4" width="26" height="44" rx="6" fill="none" stroke="#1B2438" stroke-width="2.5"/><circle cx="26" cy="22" r="7" fill="#C8233A"/></svg><b>Upload a recording</b><span>We transcribe and edit it.</span></button>
+    <button class="opt" data-mode="own_script" aria-pressed="false"><svg viewBox="0 0 52 52" aria-hidden="true"><rect x="6" y="8" width="24" height="36" rx="4" fill="none" stroke="#1B2438" stroke-width="2.5"/><path d="M11 17h14M11 24h14M11 31h9" stroke="#1B2438" stroke-width="2.5" stroke-linecap="round"/><rect x="30" y="18" width="16" height="26" rx="4" fill="#C8233A"/></svg><b>Recording plus my script</b><span>Captions use your exact words.</span></button>
+    <button class="opt" data-mode="teleprompter" aria-pressed="false"><svg viewBox="0 0 52 52" aria-hidden="true"><rect x="9" y="6" width="34" height="40" rx="6" fill="none" stroke="#1B2438" stroke-width="2.5"/><path d="M15 14h22M15 20h22M15 26h14" stroke="#C8233A" stroke-width="2.5" stroke-linecap="round"/><circle cx="26" cy="37" r="4" fill="#1B2438"/></svg><b>Write and record here</b><span>Script, then teleprompter.</span></button>
+    <button class="opt" data-mode="ai_voice" aria-pressed="false"><svg viewBox="0 0 52 52" aria-hidden="true"><path d="M4 30h10l4-10 6 20 5-14 3 4h16" fill="none" stroke="#C8233A" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="8" width="44" height="36" rx="6" fill="none" stroke="#1B2438" stroke-width="2.5"/></svg><b>No filming</b><span>Animations and an AI narrator.</span></button>
+  </div>
+
+  <div class="panel">
+    <div class="row2">
+      <label class="f" style="margin-top:0">Title <span class="muted" style="font-weight:400">(optional)</span><input id="nTitle" placeholder="e.g. What is a calcium score?"></label>
+      <label class="f" style="margin-top:0">Language of the video<select id="nLang"><option value="auto">Detect from my voice</option><option value="ar">Arabic (Lebanese)</option><option value="en">English</option><option value="fr">French</option></select></label>
+    </div>
+    <label class="f">Editing style</label><div class="chips" id="nStyles" role="group" aria-label="Editing style"></div>
+  </div>
+
+  <div class="panel hide" id="pScript">
+    <h3>Script</h3>
+    <div id="writerBox">
+      <p class="muted small" style="margin:6px 0 10px">Describe the topic and MedReel drafts a script in the video's language. Review every sentence before you use it.</p>
+      <div class="writer">
+        <label class="f" style="margin-top:0">Topic<input id="wPrompt" placeholder="e.g. why a calcium score of zero is reassuring"></label>
+        <label class="f" style="margin-top:0">Length<select id="wLen"><option value="30">30 s</option><option value="45" selected>45 s</option><option value="60">60 s</option><option value="90">90 s</option></select></label>
+        <button class="btn" id="wGo" type="button">Write a draft</button>
+      </div>
+      <div class="small" style="margin-top:12px">Or start from a script: <span class="chips" id="tpls" style="display:inline-flex;margin:0"></span></div>
+    </div>
+    <label class="f"><span id="scriptLabel">Your script</span><textarea id="nScript" class="script" dir="auto" placeholder="Write or paste what you'll say."></textarea><span class="hint" id="scriptHint"></span></label>
+  </div>
+
+  <div class="panel" id="pUpload">
+    <h3>Recording</h3>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a video file"><b>Drop your video here, or click to choose</b><div class="muted small">Vertical phone video works best · MP4, MOV or WebM · up to 10 minutes</div><div id="fname" style="margin-top:10px;font-weight:600"></div></div>
+    <input type="file" id="file" accept="video/*" hidden>
+  </div>
+
+  <div class="panel hide" id="pRecord">
+    <h3>Record with the teleprompter</h3>
+    <div class="tp">
+      <div class="cam"><video id="camv" class="mirror" autoplay muted playsinline></video><div class="prompter" id="prompter"><div id="prompterText"></div></div><div class="count hide" id="count"></div><div class="rec hide" id="recBadge">● REC <span id="recT">0:00</span></div></div>
+      <div>
+        <p class="muted">Hold the phone upright at eye level, face a window, and read at your normal pace. The script scrolls on its own; adjust the speed while you record.</p>
+        <label class="f">Scroll speed<input type="range" id="tpSpeed" min="10" max="90" value="38"></label>
+        <label class="f">Text size<input type="range" id="tpSize" min="16" max="34" value="22"></label>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">
+          <button class="btn" id="camOn" type="button">Turn on camera</button>
+          <button class="btn red hide" id="recGo" type="button">Start recording</button>
+          <button class="btn red hide" id="recStop" type="button">Stop</button>
+          <button class="btn hide" id="recAgain" type="button">Record again</button>
+        </div>
+        <p class="okmsg hide" id="takeOk"></p>
+        <p class="err hide" id="camErr"></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="notice hide" id="aiNote">Narration uses a generic AI voice (male in English and Arabic, female in French), never a copy of your voice. The end card says “AI voice”, which Instagram and TikTok expect for synthetic audio.</div>
+  <div class="err hide" id="newErr"></div>
+  <div style="display:flex;gap:12px;align-items:center;margin-top:22px;flex-wrap:wrap"><button class="btn red" id="makeBtn" type="button">Make my video</button><span class="muted small">Your original recording is never modified.</span></div>
+  <div class="status hide" id="status"><h3 id="stT">Uploading…</h3><div class="bar"><i id="stBar"></i></div><p class="muted" id="stMsg"></p></div>
+</div>
+</template>
+
+<template id="t-settings">
+<div class="wrap page">
+  <div class="page-head"><h2>Settings</h2></div>
+  <div class="settings">
+    <aside><a href="#/settings" data-jump="sProfile">Profile and branding</a><a href="#/settings" data-jump="sDefaults">Defaults</a><a href="#/settings" data-jump="sPw">Password</a><a href="#/settings" data-jump="sDanger">Delete account</a></aside>
+    <div>
+      <section id="sProfile"><h3>Profile and branding</h3><p class="muted small">Shown on your name card and end card. New videos use these; existing videos keep theirs.</p>
+        <div class="row2">
+          <label class="f">Name on videos<input data-b="name"></label><label class="f">Specialty<input data-b="specialty"></label>
+          <label class="f">Clinic or hospital<input data-b="clinic"></label><label class="f">Phone<input data-b="phone"></label>
+          <label class="f">Website<input data-b="website" placeholder="www.example.com"></label><label class="f">Booking link<input data-b="booking" placeholder="Shown with a “Book a consultation” button"></label>
+        </div>
+        <label class="f">Colours</label><div class="colors"><label class="small">Accent<br><input type="color" data-b="primary"></label><label class="small">Background<br><input type="color" data-b="secondary"></label></div>
+        <label class="f">Logo</label><div class="logo-prev"><span id="logoState" class="muted small">No logo — your initials are used.</span><input type="file" id="logoFile" accept="image/png,image/jpeg"><button class="btn sm hide" id="logoDel" type="button">Remove logo</button></div>
+        <label class="f">Disclaimer on the end card<input data-b="disclaimer" placeholder="Educational content — not individual medical advice."></label>
+        <button class="btn red" id="saveProfile" style="margin-top:18px" type="button">Save branding</button>
+      </section>
+      <section id="sDefaults"><h3>Defaults for new videos</h3>
+        <div class="row2"><label class="f">Language<select id="dLang"><option value="auto">Detect from my voice</option><option value="ar">Arabic (Lebanese)</option><option value="en">English</option><option value="fr">French</option></select></label>
+        <label class="f">Editing style<select id="dStyle"></select></label></div>
+        <button class="btn" id="saveDefaults" style="margin-top:18px" type="button">Save defaults</button>
+      </section>
+      <section id="sPw"><h3>Password</h3>
+        <div class="row2"><label class="f">Current password<input id="pwCur" type="password" autocomplete="current-password"></label><label class="f">New password<input id="pwNew" type="password" autocomplete="new-password"><span class="hint">At least 10 characters. Other devices will be signed out.</span></label></div>
+        <button class="btn" id="savePw" style="margin-top:18px" type="button">Change password</button>
+      </section>
+      <section id="sDanger"><h3>Delete account</h3><p class="muted small">Permanently deletes every recording, video, transcript and your account, and cancels your subscription. This can't be undone.</p>
+        <label class="f">Type your password to confirm<input id="delPw" type="password" autocomplete="current-password"></label>
+        <button class="btn" id="delAcct" style="margin-top:18px;border-color:var(--artery);color:var(--artery-dark)" type="button">Delete my account and videos</button>
+      </section>
+    </div>
+  </div>
+</div>
+</template>
+
+<template id="t-billing">
+<div class="wrap page">
+  <div class="page-head"><div><h2>Your plan</h2><p class="muted" id="billLine"></p></div><div class="sp"></div><button class="btn hide" id="portalBtn" type="button">Manage billing and invoices</button></div>
+  <div class="okmsg hide" id="billOk"></div>
+  <div class="notice hide" id="devNote">Test mode: payments aren't connected, so choosing a plan activates it instantly without charging.</div>
+  <div class="plans" id="billPlans" style="margin-top:20px"></div>
+</div>
+</template>
+
+<script>
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let ME=null, PLANS=null, META=null;
+const toast=m=>{const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',4500)};
+async function api(url,opts={}){
+  opts.headers={...(opts.headers||{}),...(ME&&ME.csrf?{'X-CSRF-Token':ME.csrf}:{})};opts.credentials='same-origin';
+  if(opts.json!==undefined){opts.body=JSON.stringify(opts.json);opts.headers['Content-Type']='application/json';delete opts.json}
+  const r=await fetch(url,opts);const j=await r.json().catch(()=>({}));
+  if(!r.ok){const e=new Error(j.error||`Request failed (${r.status})`);e.status=r.status;e.data=j;throw e}return j}
+const showErr=(el,m)=>{el.textContent=m;el.classList.remove('hide')};
+async function refreshMe(){const r=await api('/api/auth/me');ME=r.user;PLANS=r.plans;
+  $('#navOut').classList.toggle('hide',!!ME);$('#navIn').classList.toggle('hide',!ME);return ME}
+const money=n=>`$${n}`;
+const LANG={auto:'Auto',en:'English',fr:'French',ar:'Arabic'};
+const MODE={auto_edit:'Uploaded recording',own_script:'Recording + script',teleprompter:'Teleprompter',ai_voice:'AI narration'};
+
+function planCards(el,billing){
+  const keys=['free','starter','pro','clinic'];const cur=ME?ME.plan:null;
+  el.innerHTML=keys.map(k=>{const p=PLANS[k];const isCur=cur===k;
+    let action='';
+    if(!billing) action=`<a class="btn ${k==='pro'?'red':''}" href="#/signup">${k==='free'?'Start free':'Choose '+p.name}</a>`;
+    else if(isCur) action=`<span class="cur">Your current plan</span>`;
+    else if(k==='free') action=ME.plan!=='free'?`<span class="small muted">Cancel in “Manage billing” to return to Free.</span>`:'';
+    else action=p.available?`<button class="btn ${k==='pro'?'red':''}" data-choose="${k}" type="button">${ME.plan==='free'?'Choose':'Switch to'} ${p.name}</button>`:`<span class="small muted">Not available yet</span>`;
+    return `<div class="plan ${k==='pro'?'feat':''}"><h3>${p.name}</h3><div class="price">${money(p.price)}${p.price?`<small> /month</small>`:''}</div>
+      <ul>${p.features.map(f=>`<li>${esc(f)}</li>`).join('')}</ul>${action}</div>`}).join('')+
+    `<p class="small muted" style="grid-column:1/-1">Prices in ${esc(PLANS._currency)}. Taxes may apply at checkout.</p>`;
+  $$('[data-choose]',el).forEach(b=>b.onclick=()=>choosePlan(b.dataset.choose,b));
+}
+async function choosePlan(plan,btn){
+  btn.disabled=true;
+  try{const r=await api('/api/billing/checkout',{method:'POST',json:{plan}});
+    if(r.url){location.href=r.url;return}
+    if(r.portal){const p=await api('/api/billing/portal',{method:'POST'});location.href=p.url;return}
+    if(r.dev){await api('/api/billing/dev',{method:'POST',json:{plan}});await refreshMe();toast(`${PLANS[plan].name} plan activated (test mode).`);route();return}
+  }catch(e){toast(e.message)}finally{btn.disabled=false}
+}
+
+/* ---------- views ---------- */
+const views={
+  landing(){mount('t-landing');planCards($('#landingPlans'),false);
+    if(location.hash==='#/pricing')setTimeout(()=>$('#pricing').scrollIntoView(),30)},
+  login(){mount('t-login');const f=$('#loginForm');f.onsubmit=async e=>{e.preventDefault();
+    try{const u=await api('/api/auth/login',{method:'POST',json:Object.fromEntries(new FormData(f))});ME=u;await refreshMe();location.hash='#/dashboard'}
+    catch(err){showErr($('[data-err]',f),err.message)}}},
+  signup(){mount('t-signup');const f=$('#signupForm');f.onsubmit=async e=>{e.preventDefault();
+    try{await api('/api/auth/signup',{method:'POST',json:Object.fromEntries(new FormData(f))});await refreshMe();location.hash='#/new'}
+    catch(err){showErr($('[data-err]',f),err.message)}}},
+  forgot(){mount('t-forgot');const f=$('#forgotForm');f.onsubmit=async e=>{e.preventDefault();
+    try{const r=await api('/api/auth/forgot',{method:'POST',json:Object.fromEntries(new FormData(f))});const ok=$('[data-ok]',f);
+      ok.innerHTML=esc(r.message)+(r.dev_link?`<br><br>Test mode — email isn't set up, so here is the link: <a href="${esc(r.dev_link)}">${esc(r.dev_link)}</a>`:'');ok.classList.remove('hide')}
+    catch(err){showErr($('[data-err]',f),err.message)}}},
+  reset(tok){mount('t-reset');const f=$('#resetForm');f.onsubmit=async e=>{e.preventDefault();
+    try{await api('/api/auth/reset',{method:'POST',json:{token:tok,password:new FormData(f).get('password')}});await refreshMe();toast('Password saved.');location.hash='#/dashboard'}
+    catch(err){showErr($('[data-err]',f),err.message)}}},
+  async dashboard(){mount('t-dashboard');
+    $('#hello').textContent=ME.name?`Your videos, ${ME.name.split(' ').slice(0,2).join(' ')}`:'Your videos';
+    $('#planLine').textContent=`${ME.plan_name} plan`+(ME.usage.watermark?' · videos carry a small MedReel watermark':'');
+    $('#useNum').textContent=`${ME.usage.used} of ${ME.usage.limit}`;$('#useBar').style.width=Math.min(100,100*ME.usage.used/Math.max(1,ME.usage.limit))+'%';
+    await loadVids()},
+  async new(){await newView()},
+  async settings(){await settingsView()},
+  async billing(){await billingView()},
+};
+let pollT=null;
+async function loadVids(){
+  const box=$('#vids');if(!box)return;
+  const r=await api('/api/projects');
+  if(!r.projects.length){box.innerHTML=`<div class="empty"><h3>No videos yet</h3><p class="muted">Upload a recording, write a script or describe a topic, and MedReel makes the first edit for you.</p><p style="margin-top:18px"><a class="btn red" href="#/new">Make your first video</a></p></div>`;return}
+  box.innerHTML=`<div class="grid-v">${r.projects.map(p=>{const j=p.job||{};const busy=['queued','working'].includes(j.state);
+    const st=busy?'processing':(p.status==='error'?'error':'ready');const label=busy?(j.kind==='final'?'Exporting':'Editing')+` ${Math.round((j.progress||0)*100)}%`:(p.status==='error'?'Failed':(p.exported?'Exported':'Ready to review'));
+    return `<a class="vid" href="/studio#${p.id}"><div class="th">${p.has_thumb?`<img src="/media/${p.id}/thumb.jpg" alt="">`:`<svg width="64" height="64" viewBox="0 0 52 52" aria-hidden="true"><path d="M4 30h10l4-10 6 20 5-14 3 4h16" fill="none" stroke="#E0475B" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`}<span class="st ${st}">${label}</span></div>
+      ${busy?`<div class="prog"><i style="width:${Math.round((j.progress||0)*100)}%"></i></div>`:''}
+      <div class="meta"><b>${esc(p.title)}</b><span class="small muted">${MODE[p.mode]||''} · ${LANG[p.language]||''}${p.duration?` · ${Math.round(p.duration)} s`:''}</span>
+      ${p.status==='error'&&j.msg?`<div class="small" style="color:var(--artery-dark);margin-top:4px">${esc(j.msg)}</div>`:''}</div></a>`}).join('')}</div>`;
+  if(r.projects.some(p=>['queued','working'].includes((p.job||{}).state))){clearTimeout(pollT);pollT=setTimeout(()=>{if(location.hash.startsWith('#/dashboard'))loadVids()},2500)}
+}
+
+/* ---------- new video ---------- */
+let N={mode:'auto_edit',style:null,file:null,take:null,rec:null,stream:null};
+async function newView(){
+  mount('t-new');N={mode:'auto_edit',style:ME.default_style,file:null,take:null,rec:null,stream:null};
+  META=META||await api('/api/meta');
+  const left=ME.usage.limit-ME.usage.used;
+  $('#newQuota').innerHTML=left>0?`${left} of ${ME.usage.limit} videos left this month.`:`You've used all ${ME.usage.limit} videos this month. <a href="#/billing">Upgrade your plan</a> to make more.`;
+  $('#nLang').value=ME.default_language||'auto';
+  $('#nStyles').innerHTML=Object.entries(META.styles).map(([k,v])=>`<button type="button" class="chip" data-style="${k}" aria-pressed="${k===N.style}">${esc(v)}</button>`).join('');
+  $$('#nStyles .chip').forEach(c=>c.onclick=()=>{N.style=c.dataset.style;$$('#nStyles .chip').forEach(x=>x.setAttribute('aria-pressed',x===c))});
+  $$('#modes .opt').forEach(o=>o.onclick=()=>setMode(o.dataset.mode));
+  const drop=$('#drop');drop.onclick=()=>$('#file').click();drop.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('#file').click()}};
+  drop.ondragover=e=>{e.preventDefault();drop.classList.add('on')};drop.ondragleave=()=>drop.classList.remove('on');
+  drop.ondrop=e=>{e.preventDefault();drop.classList.remove('on');pickFile(e.dataTransfer.files[0])};
+  $('#file').onchange=e=>pickFile(e.target.files[0]);
+  $('#nLang').onchange=loadTemplates;$('#wGo').onclick=writeDraft;
+  $('#camOn').onclick=camOn;$('#recGo').onclick=recStart;$('#recStop').onclick=recStop;$('#recAgain').onclick=()=>{N.take=null;$('#takeOk').classList.add('hide');$('#recAgain').classList.add('hide');$('#recGo').classList.remove('hide');showLive()};
+  $('#tpSize').oninput=e=>$('#prompterText').style.fontSize=e.target.value+'px';$('#prompterText').style.fontSize='22px';
+  $('#nScript').oninput=()=>{$('#prompterText').textContent=$('#nScript').value||'Your script will scroll here.';scriptHint()};
+  $('#makeBtn').onclick=make;
+  setMode('auto_edit');loadTemplates();
+}
+function setMode(m){N.mode=m;$$('#modes .opt').forEach(o=>o.setAttribute('aria-pressed',o.dataset.mode===m));
+  $('#pScript').classList.toggle('hide',m==='auto_edit');$('#pUpload').classList.toggle('hide',!['auto_edit','own_script'].includes(m));
+  $('#pRecord').classList.toggle('hide',m!=='teleprompter');$('#aiNote').classList.toggle('hide',m!=='ai_voice');
+  $('#writerBox').classList.toggle('hide',m==='own_script');
+  $('#scriptLabel').textContent=m==='own_script'?'What you said in the recording':(m==='ai_voice'?'Narration script':'Your script');
+  $('#nScript').placeholder=m==='own_script'?'Paste the script you read, or type what you said. Small differences are fine.':'Write or paste what will be said.';
+  $('#prompterText').textContent=$('#nScript').value||'Your script will scroll here.';scriptHint();
+  if(m!=='teleprompter')camOff()}
+function scriptHint(){const w=($('#nScript').value.trim().match(/\S+/g)||[]).length;const lang=$('#nLang').value;const wps=lang==='ar'?2.0:2.45;
+  $('#scriptHint').textContent=w?`${w} words · about ${Math.round(w/wps)} seconds spoken`:''}
+function pickFile(f){if(!f)return;if(!f.type.startsWith('video/')&&!/\.(mp4|mov|m4v|webm|mkv)$/i.test(f.name)){toast('Choose a video file.');return}
+  N.file=f;$('#fname').textContent=`${f.name} · ${(f.size/1e6).toFixed(1)} MB`}
+async function loadTemplates(){const lang=$('#nLang').value==='auto'?'en':$('#nLang').value;scriptHint();
+  try{const r=await api('/api/scripts/templates?language='+lang);$('#tpls').innerHTML=r.templates.map(t=>`<button type="button" class="chip" data-t="${t.id}">${esc(t.title)}</button>`).join('');
+    $$('#tpls .chip').forEach(c=>c.onclick=()=>{const t=r.templates.find(x=>x.id===c.dataset.t);$('#nScript').value=t.script;if(!$('#nTitle').value)$('#nTitle').value=t.title;$('#nScript').dispatchEvent(new Event('input'))})}catch(e){}}
+async function writeDraft(){const prompt=$('#wPrompt').value.trim();if(!prompt){toast('Describe the topic first.');$('#wPrompt').focus();return}
+  const lang=$('#nLang').value==='auto'?'en':$('#nLang').value;const b=$('#wGo');b.disabled=true;b.textContent='Writing…';
+  try{const r=await api('/api/scripts/generate',{method:'POST',json:{prompt,language:lang,seconds:+$('#wLen').value}});
+    $('#nScript').value=r.script;if(!$('#nTitle').value&&r.title)$('#nTitle').value=r.title;$('#nScript').dispatchEvent(new Event('input'));toast('Draft ready. Check every sentence before recording.')}
+  catch(e){toast(e.message)}finally{b.disabled=false;b.textContent='Write a draft'}}
+
+/* teleprompter recording */
+let rafId=null,recStartT=0,scrollY=0,lastT=0,chunks=[];
+async function camOn(){$('#camErr').classList.add('hide');
+  try{N.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:1080},height:{ideal:1920},aspectRatio:{ideal:9/16}},audio:{echoCancellation:true,noiseSuppression:true}});
+    showLive();$('#camOn').classList.add('hide');$('#recGo').classList.remove('hide')}
+  catch(e){showErr($('#camErr'),'Camera or microphone blocked. Allow access in your browser\'s address bar, then try again.')}}
+function showLive(){const v=$('#camv');v.srcObject=N.stream;v.muted=true;v.controls=false;v.classList.add('mirror');v.play();$('#prompter').classList.remove('hide');scrollY=0;$('#prompterText').style.transform='translateY(0)'}
+function camOff(){if(N.stream){N.stream.getTracks().forEach(t=>t.stop());N.stream=null}cancelAnimationFrame(rafId);
+  if($('#camOn')){$('#camOn').classList.remove('hide');$('#recGo').classList.add('hide');$('#recStop').classList.add('hide')}}
+async function recStart(){if(!$('#nScript').value.trim()){toast('Write the script first — it scrolls while you record.');return}
+  $('#recGo').classList.add('hide');const c=$('#count');c.classList.remove('hide');
+  for(const n of [3,2,1]){c.textContent=n;await new Promise(r=>setTimeout(r,800))}c.classList.add('hide');
+  const types=['video/mp4;codecs=avc1,mp4a','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+  const type=types.find(t=>window.MediaRecorder&&MediaRecorder.isTypeSupported(t))||'';
+  chunks=[];N.rec=new MediaRecorder(N.stream,type?{mimeType:type,videoBitsPerSecond:6e6}:{});
+  N.rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
+  N.rec.onstop=()=>{const blob=new Blob(chunks,{type:N.rec.mimeType||'video/webm'});N.take=new File([blob],'teleprompter.'+(blob.type.includes('mp4')?'mp4':'webm'),{type:blob.type});
+    const v=$('#camv');v.srcObject=null;v.src=URL.createObjectURL(blob);v.muted=false;v.controls=true;v.classList.remove('mirror');$('#prompter').classList.add('hide');
+    $('#takeOk').textContent=`Take recorded (${$('#recT').textContent}). Watch it back, then make your video — or record again.`;$('#takeOk').classList.remove('hide');$('#recAgain').classList.remove('hide')};
+  N.rec.start(1000);recStartT=performance.now();lastT=recStartT;$('#recStop').classList.remove('hide');$('#recBadge').classList.remove('hide');
+  const step=t=>{const dt=(t-lastT)/1000;lastT=t;scrollY+=dt*(+$('#tpSpeed').value);$('#prompterText').style.transform=`translateY(${-scrollY}px)`;
+    const s=Math.floor((t-recStartT)/1000);$('#recT').textContent=`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+    if(s>=600){recStop();return}rafId=requestAnimationFrame(step)};rafId=requestAnimationFrame(step)}
+function recStop(){cancelAnimationFrame(rafId);if(N.rec&&N.rec.state!=='inactive')N.rec.stop();$('#recStop').classList.add('hide');$('#recBadge').classList.add('hide')}
+
+async function make(){
+  const err=$('#newErr');err.classList.add('hide');const m=N.mode;const script=$('#nScript').value.trim();
+  const video=m==='teleprompter'?N.take:N.file;
+  if(['auto_edit','own_script'].includes(m)&&!video)return showErr(err,'Add your recording first.');
+  if(m==='teleprompter'&&!video)return showErr(err,'Record your take with the teleprompter first.');
+  if(m!=='auto_edit'&&!script)return showErr(err,'Add the script first.');
+  const fd=new FormData();fd.append('mode',m);fd.append('title',$('#nTitle').value);fd.append('language',$('#nLang').value);fd.append('style',N.style||'modern_educational');
+  if(script)fd.append('script',script);if(video)fd.append('video',video,video.name);
+  camOff();$('#makeBtn').disabled=true;const st=$('#status');st.classList.remove('hide');st.scrollIntoView({behavior:'smooth',block:'center'});
+  setSt(video?'Uploading your recording…':'Starting…',0,'');
+  try{
+    const r=await new Promise((res,rej)=>{const x=new XMLHttpRequest();x.open('POST','/api/projects');x.setRequestHeader('X-CSRF-Token',ME.csrf);
+      x.upload.onprogress=e=>{if(e.lengthComputable)setSt('Uploading your recording…',e.loaded/e.total*0.15,`${Math.round(e.loaded/e.total*100)}%`)};
+      x.onload=()=>{let j={};try{j=JSON.parse(x.responseText)}catch(_){}x.status<300?res(j):rej(Object.assign(new Error(j.error||'Upload failed.'),{status:x.status}))};
+      x.onerror=()=>rej(new Error('Upload failed — check your connection.'));x.send(fd)});
+    await refreshMe();
+    while(true){await new Promise(r=>setTimeout(r,1500));const s=await api(`/api/projects/${r.id}/status`);
+      if(s.state==='error'){throw new Error(s.msg)}
+      setSt(s.kind==='generate'?'Editing your video…':'Rendering the preview…',0.15+0.85*(s.progress||0),s.msg||'');
+      if(s.state==='done'){location.href='/studio#'+r.id;return}}
+  }catch(e){st.classList.add('hide');showErr(err,e.message+(e.status===402?' ':''));if(e.status===402)err.innerHTML+=' <a href="#/billing">See plans</a>';$('#makeBtn').disabled=false}
+}
+function setSt(t,p,m){$('#stT').textContent=t;$('#stBar').style.width=Math.round(p*100)+'%';$('#stMsg').textContent=m}
+
+/* ---------- settings ---------- */
+async function settingsView(){mount('t-settings');META=META||await api('/api/meta');const b={...META.brand_defaults,...ME.brand};
+  $$('[data-b]').forEach(i=>{const v=b[i.dataset.b];i.value=v==null?'':v});
+  if(!ME.brand.name)$('[data-b=name]').value=ME.name;if(!ME.brand.specialty)$('[data-b=specialty]').value=ME.specialty;
+  const hasLogo=!!ME.brand.logo;$('#logoState').textContent=hasLogo?'Logo uploaded.':'No logo — your initials are used.';$('#logoDel').classList.toggle('hide',!hasLogo);
+  $('#dStyle').innerHTML=Object.entries(META.styles).map(([k,v])=>`<option value="${k}">${esc(v)}</option>`).join('');$('#dStyle').value=ME.default_style;$('#dLang').value=ME.default_language;
+  $$('aside a[data-jump]').forEach(a=>a.onclick=e=>{e.preventDefault();$('#'+a.dataset.jump).scrollIntoView({behavior:'smooth'})});
+  $('#saveProfile').onclick=async()=>{const brand={};$$('[data-b]').forEach(i=>brand[i.dataset.b]=i.value);
+    try{ME=await api('/api/account/profile',{method:'PUT',json:{brand,name:brand.name,specialty:brand.specialty}});toast('Branding saved. New videos will use it.')}catch(e){toast(e.message)}};
+  $('#logoFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;const fd=new FormData();fd.append('logo',f);
+    try{ME=await api('/api/account/logo',{method:'POST',body:fd});toast('Logo uploaded.');settingsView()}catch(err){toast(err.message)}};
+  $('#logoDel').onclick=async()=>{ME=await api('/api/account/logo',{method:'DELETE'});toast('Logo removed.');settingsView()};
+  $('#saveDefaults').onclick=async()=>{try{ME=await api('/api/account/profile',{method:'PUT',json:{default_language:$('#dLang').value,default_style:$('#dStyle').value}});toast('Defaults saved.')}catch(e){toast(e.message)}};
+  $('#savePw').onclick=async()=>{try{const r=await api('/api/auth/password',{method:'POST',json:{current:$('#pwCur').value,new:$('#pwNew').value}});await refreshMe();toast(r.message);$('#pwCur').value=$('#pwNew').value=''}catch(e){toast(e.message)}};
+  $('#delAcct').onclick=async()=>{if(!confirm('Delete your account and every video permanently?'))return;
+    try{const r=await api('/api/account',{method:'DELETE',json:{password:$('#delPw').value}});ME=null;await refreshMe();toast(r.message);location.hash='#/'}catch(e){toast(e.message)}};
+}
+
+/* ---------- billing ---------- */
+async function billingView(){mount('t-billing');await refreshMe();
+  const q=new URLSearchParams(location.hash.split('?')[1]||'');
+  if(q.get('checkout')==='success'){const ok=$('#billOk');ok.textContent='Thanks — your subscription is active. It can take a few seconds to show here.';ok.classList.remove('hide');setTimeout(async()=>{await refreshMe();if(location.hash.startsWith('#/billing'))renderBill()},4000)}
+  $('#devNote').classList.toggle('hide',!(ME.dev&&!ME.billing_live));
+  renderBill()}
+function renderBill(){const u=ME;const p=PLANS[u.plan];
+  let line=`${p.name} plan · ${u.usage.used} of ${u.usage.limit} videos used this month`;
+  if(u.plan!=='free'&&u.current_period_end){const d=new Date(u.current_period_end+'Z').toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});line+=u.cancel_at_period_end?` · ends on ${d}`:` · renews on ${d}`}
+  if(u.sub_status==='past_due')line+=' · payment failed — update your card in Manage billing';
+  $('#billLine').textContent=line;$('#portalBtn').classList.toggle('hide',!(u.billing_live&&u.subscribed_plan!=='free'));
+  $('#portalBtn').onclick=async()=>{try{const r=await api('/api/billing/portal',{method:'POST'});location.href=r.url}catch(e){toast(e.message)}};
+  planCards($('#billPlans'),true)}
+
+/* ---------- router ---------- */
+function mount(id){const v=$('#view');v.innerHTML='';v.appendChild(document.getElementById(id).content.cloneNode(true));window.scrollTo(0,0)}
+async function route(){
+  const h=location.hash||'#/';const [path]=h.slice(2).split('?');const parts=path.split('/');
+  if(ME===null&&!route._loaded){await refreshMe().catch(()=>{});route._loaded=true}
+  $$('nav.top a.nl[data-n]').forEach(a=>a.classList.toggle('on',a.dataset.n===parts[0]));
+  const authed=['dashboard','new','settings','billing'];
+  if(N.stream&&parts[0]!=='new')camOff();
+  if(authed.includes(parts[0])&&!ME){location.hash='#/login';return}
+  if(['login','signup'].includes(parts[0])&&ME){location.hash='#/dashboard';return}
+  if(parts[0]==='reset')return views.reset(parts.slice(1).join('/'));
+  if(parts[0]===''||parts[0]==='pricing'){if(ME&&parts[0]==='')return location.hash='#/dashboard';return views.landing()}
+  (views[parts[0]]||views.landing)();
+}
+window.addEventListener('hashchange',route);route();
+</script>
+</body>
+</html>

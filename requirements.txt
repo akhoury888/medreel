@@ -1,0 +1,9 @@
+Flask>=3.0,<4
+gunicorn>=22
+SQLAlchemy>=2.0,<3
+psycopg[binary]>=3.1
+stripe>=10
+numpy>=1.26
+opencv-python-headless>=4.9
+Pillow>=10.3
+sherpa-onnx==1.12.40   # pinned: newer releases dropped the espeak frontend the Piper voices need

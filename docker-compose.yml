@@ -1,0 +1,33 @@
+# One server runs everything:  cp .env.example .env  (fill it in)  ->  docker compose up -d --build
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment: { POSTGRES_DB: medreel, POSTGRES_USER: medreel, POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}" }
+    volumes: [ "pgdata:/var/lib/postgresql/data" ]
+  web:
+    build: { context: ., args: { WITH_LARGE: "${WITH_LARGE:-0}" } }
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://medreel:${POSTGRES_PASSWORD}@db:5432/medreel
+      WORKER_INLINE: "0"
+    volumes: [ "storage:/data" ]
+    depends_on: [ db ]
+  worker:
+    build: { context: ., args: { WITH_LARGE: "${WITH_LARGE:-0}" } }
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://medreel:${POSTGRES_PASSWORD}@db:5432/medreel
+    command: python worker.py
+    volumes: [ "storage:/data" ]
+    depends_on: [ db ]
+  caddy:   # HTTPS certificates are automatic once DOMAIN points at this server
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: [ "80:80", "443:443" ]
+    command: caddy reverse-proxy --from ${DOMAIN} --to web:8080
+    volumes: [ "caddy:/data" ]
+    depends_on: [ web ]
+volumes: { pgdata: {}, storage: {}, caddy: {} }

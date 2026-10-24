@@ -1,0 +1,6 @@
+data
+projects
+samples/*.mp4
+.git
+.env
+__pycache__
