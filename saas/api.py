@@ -48,7 +48,7 @@ def meta():
                     "captions": planner.CAPTION_STYLES, "music": planner.MUSIC_TRACKS, "assets": graphics.ASSET_INFO,
                     "brand_defaults": planner.DEFAULT_BRAND, "modes": pipeline.MODES,
                     "voices": {l: synth.available(l) for l in ("en", "fr", "ar")},
-                    "ai_scripts": bool(os.environ.get("ANTHROPIC_API_KEY")),
+                    "ai_scripts": bool(os.environ.get("ANTHROPIC_API_KEY")), "stock": bool(os.environ.get("PEXELS_API_KEY")),
                     "projects": [p.id for p in Session.scalars(select(Project).where(Project.user_id == current_user().id).order_by(Project.created_at.desc()).limit(20))]})
 
 
@@ -227,6 +227,40 @@ def list_photos(pid):
     return jsonify({"photos": ids})
 
 
+@bp.get("/api/stock/search")
+@login_required
+def stock_search():
+    from engine import broll
+    if not broll.available(): return jsonify({"error": "Stock videos need a free Pexels key (PEXELS_API_KEY).", "results": []}), 503
+    q = (request.args.get("q") or "").strip()[:80]
+    if not q: return jsonify({"results": []})
+    try: res = broll.search(q, per_page=12)
+    except Exception: return jsonify({"error": "The stock video library didn't answer. Try again in a moment.", "results": []}), 502
+    return jsonify({"results": [{k: v for k, v in r.items() if k != "_files"} for r in res]})
+
+
+@bp.post("/api/projects/<pid>/stock")
+@login_required
+def add_stock(pid):
+    from engine import broll, commands
+    p = _own(pid)
+    if _busy(p): abort(409, "Wait until the first edit is finished.")
+    b = request.get_json(force=True, silent=True) or {}
+    try: vid = int(b.get("video_id"))
+    except (TypeError, ValueError): abort(400, "Choose a video.")
+    try: clip = broll.fetch(vid, p.dir)
+    except Exception: clip = None
+    if not clip: abort(502, "Couldn't download that video. Try another one.")
+    op = {"op": "add_broll", "clip": clip}
+    if str(b.get("sentence", "")).isdigit(): op["sentence"] = int(b["sentence"])
+    else:
+        try: op["t_out"] = max(0.0, float(b.get("t_out") or 0))
+        except (TypeError, ValueError): pass
+    res = commands.execute_ops(_plan_path(p), [op], label="Add stock video")
+    jobs.enqueue(p, "preview", priority=_prio())
+    return jsonify(res)
+
+
 @bp.post("/api/projects/<pid>/undo")
 @login_required
 def undo(pid):
@@ -265,6 +299,8 @@ def media(pid, name):
     if name.startswith("source.") and "/" not in name: return send_from_directory(p.dir, name, conditional=True)
     m = re.fullmatch(r"photo_([0-9a-f]{12})\.jpg", name)
     if m: return send_from_directory(os.path.join(p.dir, "photos"), m.group(1) + ".jpg", conditional=True)
+    m = re.fullmatch(r"broll_(px\d{1,12})\.jpg", name)
+    if m: return send_from_directory(os.path.join(p.dir, "broll"), m.group(1) + ".jpg", conditional=True)
     if name not in allowed: abort(404)
     dl = request.args.get("dl") == "1"
     nice = f"{(p.title or 'video')[:60]}{os.path.splitext(name)[1]}" if dl else None

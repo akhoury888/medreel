@@ -181,11 +181,17 @@ def detect_terms(words):
     return out
 
 
+LUNG_CONTEXT = re.compile(r"رئوي|رئه|الرئتين|ربو|\blungs?\b|pulmonar|copd|asthma|\bpoumon|pulmonaire|bpco|asthme|bronch|قصبات")
+CARDIAC_CONTEXT = re.compile(r"قلب|شريان|شرايين|تاجي|\bheart|coronar|arter|\bcoeur|cardia|stent|ستنت|رسور")
+
+
 def match_graphics(text: str):
     """Every graphic this sentence could illustrate, best first (the planner picks for variety)."""
     out = []
     t = _match_text(text)
+    lung_only = bool(LUNG_CONTEXT.search(t)) and not CARDIAC_CONTEXT.search(t)  # 'انسداد رئوي' (COPD) is not a coronary blockage
     for asset, mode, pats, prio, layout, label in GRAPHIC_RULES:
+        if lung_only and asset in ("coronary", "heart", "ct"): continue
         for p in pats:
             if re.search(p, t):
                 if asset == "bp" and BP_RE.search(t): prio = 11

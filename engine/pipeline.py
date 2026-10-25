@@ -38,10 +38,22 @@ def analyze_and_plan(d, src, style="modern_educational", branding=None, log=prin
     plan = P.build_plan(src, backend, words, an, style=style, branding=branding, language=lang)
     if title and len(title) <= 60:  # the doctor's own title beats a sentence picked from the transcript
         plan["title"].update({"text": title, "enabled": True})
+    _stock(plan, d, p)
     plan["mode"] = "auto_edit"
     P.save(plan, os.path.join(d, "plan.json"), history=False)
     p(0.8, "Plan ready.")
     return plan
+
+
+def _stock(plan, d, p):
+    from . import broll
+    if not broll.available(): return
+    p(0.78, "Adding stock footage…")
+    try:
+        n = broll.auto(plan, d)
+        if n: p(0.8, f"Added {n} stock clip(s).")
+    except Exception:
+        pass  # footage is a bonus: never fail a video because of it
 
 
 MODES = {"auto_edit": "Upload a recording — AI edits everything",
@@ -90,6 +102,7 @@ def create(d, mode, src=None, script=None, style="modern_educational", branding=
             plan["analysis"]["qa"]["issues"].append({"area": "script", "level": "warn",
                 "msg": "The recording doesn't follow the script closely — check caption timing, or switch to automatic captions."})
     if title and len(title) <= 60: plan["title"].update({"text": title, "enabled": True})
+    _stock(plan, d, p)
     plan["mode"] = mode
     P.save(plan, os.path.join(d, "plan.json"), history=False)
     p(0.8, "Plan ready.")

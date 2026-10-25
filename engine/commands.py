@@ -17,7 +17,7 @@ OPS_SCHEMA = {
     "set_music": {"track": P.MUSIC_TRACKS + ["next", "off", "on"]}, "music_volume": {"delta_db": "int"},
     "zoom": {"delta": "float"}, "caption_mode": {"mode": "original|translated|both", "target": "en|fr|ar"},
     "translate_captions": {"target": "en|fr|ar"}, "set_translation": {"i": "sentence index", "text": "str"}, "set_title": {"text": "str"}, "title_enabled": {"enabled": "bool"}, "undo": {},
-    "add_photo": {"photo": "id", "sentence": "int?", "phrase": "str?", "t_out": "sec?", "caption": "str?"}, "delete_scene": {"id": "str"},
+    "add_broll": {"clip": "id", "sentence": "int?"}, "add_photo": {"photo": "id", "sentence": "int?", "phrase": "str?", "t_out": "sec?", "caption": "str?"}, "delete_scene": {"id": "str"},
 }
 
 ASSET_WORDS = [("coronary/stent", r"stent|angioplast|balloon"), ("coronary/occlusion", r"clot|heart attack|infarct|ruptur|occlu"),
@@ -223,10 +223,15 @@ def apply(plan, op):
         plan["cuts"].append({"id": f"cut_{uuid.uuid4().hex[:6]}", "start": round(s["start"] - 0.05, 3), "end": round(s["end"] + 0.05, 3),
                              "reason": "manual", "enabled": True, "auto": False, "note": f"Removed: “{s['text']}”"})
         return f"Removed the sentence “{s['text']}”."
+    if o == "add_broll":  # a stock clip downloaded by the API into broll/<clip>.mp4
+        clip = str(op.get("clip", ""))
+        if not re.fullmatch(r"px\d{1,12}", clip): return "Unknown clip."
+        op = {**op, "op": "add_photo", "photo": "", "_asset": f"broll/{clip}", "layout": op.get("layout") or ("pip" if plan.get("presenter", True) else "full_graphic")}
+        o = "add_photo"
     if o == "add_photo":  # a photo the doctor uploaded (saved as photos/<id>.jpg by the API)
         pid = str(op.get("photo", ""))
-        if not re.fullmatch(r"[0-9a-f]{12}", pid): return "Unknown photo."
-        op = {**op, "op": "add_graphic", "asset": f"photo/{pid}", "layout": op.get("layout") or ("split" if plan.get("presenter", True) else "full_graphic")}
+        if not op.get("_asset") and not re.fullmatch(r"[0-9a-f]{12}", pid): return "Unknown photo."
+        op = {**op, "op": "add_graphic", "asset": op.get("_asset") or f"photo/{pid}", "layout": op.get("layout") or ("split" if plan.get("presenter", True) else "full_graphic")}
         o = "add_graphic"
         if op.get("sentence") is not None:  # placed next to a line of the script
             sents = plan["analysis"]["sentences"]; i = int(op["sentence"])
@@ -248,8 +253,8 @@ def apply(plan, op):
         else:
             a, _ = tl.to_src(float(op.get("t_out") or 0)); b = a + 5
         if b - a < 4.5: b = a + 4.5
-        if asset == "photo": b = min(max(b, a + 4.0), a + 7.0)  # a photo reads in 4–7 s
-        default_layout = "split" if asset == "photo" else {"stent": "pip", "occlusion": "split", "narrowing": "side", "sinus": "side", "gauge": "labels", "calcium": "split",
+        if asset in ("photo", "broll"): b = min(max(b, a + (4.0 if asset == "photo" else 3.5)), a + (7.0 if asset == "photo" else 6.0))
+        default_layout = "split" if asset == "photo" else "pip" if asset == "broll" else {"stent": "pip", "occlusion": "split", "narrowing": "side", "sinus": "side", "gauge": "labels", "calcium": "split",
                           "scanner": "split", "coronaries": "split"}.get(mode, "split")
         kept = []
         for x in plan["scenes"]:
@@ -261,10 +266,10 @@ def apply(plan, op):
                 kept.append(x)
         plan["scenes"] = kept
         plan["scenes"].append({"id": f"scn_{uuid.uuid4().hex[:6]}", "start": round(a, 3), "end": round(b, 3), "layout": op.get("layout") or default_layout,
-                               "graphic": {"asset": asset, "mode": mode, "label": "Photo" if asset == "photo" else op["asset"]}, "text": s["text"] if s else "",
+                               "graphic": {"asset": asset, "mode": mode, "label": "Photo" if asset == "photo" else "Stock video" if asset == "broll" else op["asset"]}, "text": s["text"] if s else "",
                                "auto": False, "enabled": True, **({"caption": str(op.get("caption") or "")[:80]} if asset == "photo" else {})})
         plan["scenes"].sort(key=lambda x: x["start"])
-        what = "photo" if asset == "photo" else f"{op['asset'].replace('/', ' ')} animation"
+        what = "photo" if asset == "photo" else "stock video" if asset == "broll" else f"{op['asset'].replace('/', ' ')} animation"
         return f"Added the {what} at {tl.to_out(a):.1f}s ({op.get('layout') or default_layout} layout)."
     if o == "remove_graphics":
         before = len(plan["scenes"])

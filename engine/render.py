@@ -213,7 +213,7 @@ class Captions:
                 h = spr.shape[0] / H; wf = spr.shape[1] / W
                 def ov(b, r): return max(0, min(b[2], r[2]) - max(b[0], r[0])) * max(0, min(b[3], r[3]) - max(b[1], r[1]))
                 best = None
-                for k, yc in enumerate((0.775, 0.70, 0.83, 0.62, 0.89, 0.50, 0.54, 0.46, 0.42, 0.38, 0.30)):
+                for k, yc in enumerate((0.775, 0.70, 0.83, 0.62, 0.89, 0.92, 0.50, 0.54, 0.46, 0.42, 0.38, 0.30)):
                     box = (0.5 - wf / 2, yc - h / 2, 0.5 + wf / 2, yc + h / 2)
                     if box[1] < 0.02 or box[3] > 0.97: continue
                     pen = sum(ov(box, r[:4]) * (r[4] if len(r) > 4 else 1.0) for r in avoid) + k * 1e-4
@@ -434,6 +434,8 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
     kw_pills = [(tl.to_out(e["start"]), e["term"]) for e in plan.get("emphasis", []) if e.get("enabled", True) and e.get("term")]
     pill_cache = {}
     GP.PHOTO_DIR = os.path.join(os.path.dirname(os.path.abspath(src["path"])), "photos")
+    GP.BROLL_DIR = os.path.join(os.path.dirname(os.path.abspath(src["path"])), "broll"); GP._READERS.clear()
+    ov_y = {}
     zp = plan["zoom"]; tr = plan["style_params"].get("transition", 0.4)
     logo = _logo(brand, int(150 * s), accent, sec)
     small_logo = scale_rgba(logo, (92 * s) / logo.shape[1])
@@ -463,12 +465,15 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
             frame = cv2.addWeighted(ov, 0.28, frame, 0.72, 0)
         # active scene + transition mix
         LY = LAYOUT_RTL if rtl else LAYOUT
-        lay, scn, m = LY["full"], None, 0.0
+        lay, scn, m, ovs = LY["full"], None, 0.0, None
         for a, b, sc in scenes:
             if a - 0.001 <= T < b:
+                if sc["layout"] == "overlay" or sc["graphic"]["asset"] == "icons":  # floating card: the layout stays as it is
+                    ovs = ovs or (a, b, sc); continue
+                if scn is not None: continue
                 scn = sc; lt = sc["layout"] if sc["layout"] in LAYOUT else "side"
                 m = ease_in_out(min((T - a) / tr, (b - T) / tr, 1.0))
-                lay = _lerp_layout(LY["full"], LY[lt], m); break
+                lay = _lerp_layout(LY["full"], LY[lt], m)
         # zoom: alternate per jump-cut segment + slow push + keyword punch
         seg_a, seg_b = keeps[seg]; seg_out0 = tl.offsets[seg]
         z = 1 + (zp["intensity"] if seg % 2 and presenter else 0)
@@ -561,9 +566,26 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
             lx = (W - 50 * s - lower.shape[1] + (1 - a) * 120 * s) if rtl else (50 * s - (1 - a) * 120 * s)
             blit(canvas, lower, lx, ly, a)
             avoid.append((0, ly / H, 1, (ly + lower.shape[0]) / H))
+        if ovs is not None:  # icon card (any specialty), placed where it covers neither the face nor the title
+            oa, ob, osc = ovs; items = osc["graphic"].get("items", [])
+            cw_, ch_ = int(W * 0.88), int(H * (0.085 if len(items) <= 1 else 0.13))
+            if not presenter: cw_, ch_ = int(W * 0.90), int(H * (0.17 if len(items) <= 1 else 0.24))  # no face: the card is the visual
+            if osc["id"] not in ov_y:
+                yy_ = 0.14
+                if presenter:
+                    for yc in (0.60, 0.66, 0.70, 0.13, 0.18, 0.715):
+                        bx = (0.06, yc, 0.94, yc + ch_ / H)
+                        if face_box is None or not (bx[0] < face_box[2] and face_box[0] < bx[2] and bx[1] < face_box[3] and face_box[1] < bx[3]):
+                            yy_ = yc; break
+                ov_y[osc["id"]] = yy_
+            card = GP.icons_card(cw_, ch_, T - oa, ob - oa, items=items, accent=accent, lang=glang)
+            yv = ov_y[osc["id"]] * H + (1 - ease_out_cubic((T - oa) / 0.3)) * 40 * s
+            shadow_rect(canvas, (W - cw_) / 2, yv, cw_, ch_, int(min(ch_ * 0.28, 40 * s)), 0.35 * min(1, (T - oa) / 0.3), int(20 * s))
+            blit(canvas, card, (W - cw_) / 2, yv)
+            avoid.append((0.06, ov_y[osc["id"]], 0.94, ov_y[osc["id"]] + ch_ / H, 4.0))
         for ka, term in kw_pills:  # kinetic keyword: the medical term pops up as the doctor says it
             age = T - ka
-            if not (0 <= age < 2.2) or scn is not None: continue
+            if not (0 <= age < 2.2) or scn is not None or ovs is not None: continue
             if term not in pill_cache:
                 f_ = font_for(term, "Poppins", 800, int(56 * s))
                 t_ = text_sprite(term, f_, (255, 255, 255), pad=0)
@@ -584,6 +606,7 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
             avoid.append((0, yk, 1, yk + pc.shape[0] / H)); break
         if caps:
             lk = None if (scn is None or m < 0.02) else scn["id"] if m > 0.97 else "keep"  # re-place once the layout has settled
+            if lk != "keep" and ovs is not None: lk = f"{lk}|{ovs[2]['id']}"  # an icon card appearing also moves the subtitles
             placed = caps.draw(canvas, T, avoid, layout_key=lk)
             if caps2 and placed: caps2.draw(canvas, T, avoid, force_top=placed[1] - 6 * s)
         blit(canvas, small_logo, 40 * s, 52 * s, 0.85)

@@ -535,7 +535,7 @@ def ct(W, H, t, D, mode="calcium", **kw):
 def register():
     from .draw import shadow_rect
     G.shadow_rect = shadow_rect
-    G.ASSETS.update({"ct": ct, "heart": heart, "photo": photo})
+    G.ASSETS.update({"ct": ct, "heart": heart, "photo": photo, "broll": lambda *a, **k: broll(*a, **k)})
     G.ASSET_INFO.update({
         "ct/calcium": "Cardiac CT — calcium lights up in each artery, then the CAC-DRS score scale",
         "ct/scanner": "CT scanner — patient slides in, ECG-gated scan, slices appear",
@@ -544,3 +544,102 @@ def register():
 
 
 register()
+
+
+# ------------------------------------------------------------------ icon cards (any specialty)
+ICON_DIR = os.path.join(os.path.dirname(__file__), "..", "assets", "icons")
+
+
+@functools.lru_cache(maxsize=128)
+def _icon_mask(icon_id, size):
+    m = cv2.imread(os.path.join(ICON_DIR, icon_id + ".png"), cv2.IMREAD_GRAYSCALE)
+    if m is None: m = np.zeros((256, 256), np.uint8)
+    return cv2.resize(m, (size, size), interpolation=cv2.INTER_AREA)
+
+
+def _icon_badge(icon_id, size, accent, k=1.0):
+    """Accent disc with a white icon (RGBA)."""
+    d = max(8, int(size * k))
+    out = np.zeros((d, d, 4), np.uint8)
+    yy, xx = np.mgrid[0:d, 0:d].astype(np.float32)
+    g = np.clip(1.15 - ((xx - d * .35) ** 2 + (yy - d * .3) ** 2) ** 0.5 / d, 0.75, 1.15)
+    out[..., :3] = np.clip(np.array(accent, np.float32) * g[..., None], 0, 255).astype(np.uint8)
+    disc = np.zeros((d, d), np.uint8); cv2.circle(disc, (d // 2, d // 2), d // 2 - 1, 255, -1, cv2.LINE_AA)
+    out[..., 3] = disc
+    ic = _icon_mask(icon_id, int(d * 0.62)); o = (d - ic.shape[0]) // 2
+    a = ic.astype(np.float32)[..., None] / 255
+    out[o:o + ic.shape[0], o:o + ic.shape[1], :3] = (out[o:o + ic.shape[0], o:o + ic.shape[1], :3] * (1 - a) + 255 * a).astype(np.uint8)
+    return out
+
+
+def icons_card(W, H, t, D, items=(), accent=(46, 160, 255), lang="en", **_):
+    """RGBA card: one big tile (icon + label) or a row of 2–3 tiles, each popping in when it is said.
+    items: [{"key", "at"}] with `at` seconds after the card starts."""
+    from . import concepts as CO
+    s = _s(W) if W >= 400 else W / 950
+    items = [it for it in items if it.get("key") in CO.C][:3]
+    card = np.zeros((H, W, 4), np.uint8)
+    if not items: return card
+    out_a = min(1.0, (D - t) / 0.3) if D - t < 0.3 else 1.0
+    base = ease_out_cubic(t / 0.25) * out_a
+    card[..., :3] = (12, 24, 46); card[..., 3] = (rounded_mask(W, H, int(min(H * 0.28, 40 * s))).astype(np.float32) * 0.9 * base).astype(np.uint8)
+    rtl = lang == "ar"
+    if len(items) == 1:
+        it = items[0]; a = clamp((t - it.get("at", 0)) / 0.35, 0, 1)
+        d = int(H * 0.72); k = 0.55 + 0.45 * ease_out_back(a)
+        b = _icon_badge(CO.icon(it["key"]), d, accent, k)
+        bx = W - int(H * 0.14) - d if rtl else int(H * 0.14)
+        blit(card, b, bx + (d - b.shape[1]) / 2, (H - b.shape[0]) / 2, min(1, a * 3) * out_a)
+        lab = CO.label(it["key"], lang)
+        f = fit_font(lab, "Poppins", 800, int(H * 0.30), W - d - H * 0.5)
+        ts = text_sprite(lab, f, (255, 255, 255), pad=0)
+        tx = bx - int(H * 0.16) - ts.shape[1] if rtl else bx + d + int(H * 0.16)
+        la = ease_out_cubic((t - it.get("at", 0) - 0.1) / 0.3) * out_a
+        blit(card, ts, tx + (1 - la) * (-30 if rtl else 30) * s, (H - ts.shape[0]) / 2, la)
+        return card
+    n = len(items); cw = W / n
+    order = list(range(n))[::-1] if rtl else list(range(n))
+    for slot, idx in enumerate(order):
+        it = items[idx]; a = clamp((t - it.get("at", 0)) / 0.35, 0, 1)
+        if a <= 0: continue
+        d = int(min(H * 0.46, cw * 0.5)); k = 0.55 + 0.45 * ease_out_back(a)
+        b = _icon_badge(CO.icon(it["key"]), d, accent, k)
+        cx = cw * slot + cw / 2
+        blit(card, b, cx - b.shape[1] / 2, H * 0.08 + (d - b.shape[0]) / 2, min(1, a * 3) * out_a)
+        lab = CO.label(it["key"], lang)
+        ts = text_sprite(lab, fit_font(lab, "Poppins", 700, int(H * 0.20), cw * 0.92), (255, 255, 255), pad=0)
+        blit(card, ts, cx - ts.shape[1] / 2, H * 0.08 + d + H * 0.05, ease_out_cubic((t - it.get("at", 0) - 0.1) / 0.3) * out_a)
+        if slot < n - 1:
+            x = int(cw * (slot + 1)); cv2.line(card, (x, int(H * .2)), (x, int(H * .8)), (60, 80, 110, int(255 * base)), max(1, int(2 * s)), cv2.LINE_AA)
+    return card
+
+
+# ------------------------------------------------------------------ stock B-roll clips
+BROLL_DIR = None  # set by the renderer to <project>/broll
+_READERS = {}
+
+
+def broll(W, H, t, D, mode="", **_):
+    path = os.path.join(BROLL_DIR or "", f"{mode}.mp4")
+    if not mode or not os.path.exists(path): return G._bg(W, H).astype(np.uint8).copy()
+    r = _READERS.get(path)
+    if r is None:
+        cap = cv2.VideoCapture(path)
+        r = _READERS[path] = {"cap": cap, "i": -1, "frame": None, "n": max(1, int(cap.get(cv2.CAP_PROP_FRAME_COUNT))), "fps": cap.get(cv2.CAP_PROP_FPS) or 30}
+    want = int(t * r["fps"]) % r["n"]
+    if want < r["i"]:  # scene restarted (or looped): rewind
+        r["cap"].set(cv2.CAP_PROP_POS_FRAMES, 0); r["i"] = -1
+    while r["i"] < want:
+        ok, fr = r["cap"].read()
+        if not ok: break
+        r["i"] += 1; r["frame"] = fr
+    fr = r["frame"]
+    if fr is None: return G._bg(W, H).astype(np.uint8).copy()
+    fr = cv2.cvtColor(fr, cv2.COLOR_BGR2RGB)
+    fh, fw = fr.shape[:2]
+    z = 1.0 + 0.05 * clamp(t / max(D, 0.1), 0, 1)  # gentle push-in
+    sc = max(W / fw, H / fh) * z
+    rw, rh = max(W, int(fw * sc)), max(H, int(fh * sc))
+    big = cv2.resize(fr, (rw, rh), interpolation=cv2.INTER_AREA if sc < 1 else cv2.INTER_LINEAR)
+    x0, y0 = (rw - W) // 2, (rh - H) // 2
+    return np.ascontiguousarray(big[y0:y0 + H, x0:x0 + W])

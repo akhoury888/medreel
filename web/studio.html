@@ -81,7 +81,7 @@ details summary{cursor:pointer;font-weight:600;margin:6px 0}
     <div>
       <div class="stats" id="stats"></div>
       <div class="card">
-        <div class="tabs" id="tabs"><button data-t="edits" class="on">AI edits</button><button data-t="gfx">Medical graphics</button><button data-t="photos">Photos</button><button data-t="tx">Transcript</button><button data-t="review">Review</button><button data-t="brand">Style & brand</button></div>
+        <div class="tabs" id="tabs"><button data-t="edits" class="on">AI edits</button><button data-t="gfx">Medical graphics</button><button data-t="photos">Photos & videos</button><button data-t="tx">Transcript</button><button data-t="review">Review</button><button data-t="brand">Style & brand</button></div>
         <div id="tab-edits"></div><div id="tab-gfx" class="hide"></div><div id="tab-photos" class="hide"></div><div id="tab-tx" class="hide"></div><div id="tab-review" class="hide"></div><div id="tab-brand" class="hide"></div>
       </div>
       <div class="card" style="margin-top:14px">
@@ -152,8 +152,8 @@ function renderAll(r){
   // graphics
   const L=META.layouts.map(l=>`<option>${l}</option>`).join('');
   $('#tab-gfx').innerHTML=(P.scenes.length?'':'<p class="mut">No graphics yet.</p>')+P.scenes.map(s=>{const ot=o.scenes[s.id]||[];return `<div class="row"><span class="t" onclick="setVideo('preview');setTimeout(()=>seek(${ot[0]}),300)">${fmt(ot[0])}</span>
-    <div class="grow"><b>${esc(META.assets[s.graphic.asset+'/'+s.graphic.mode]||s.graphic.label)}</b><div class="mini">${esc(s.caption||s.text||'')}</div></div>
-    <select onchange="ops([{op:'scene_update',id:'${s.id}',layout:this.value}],true)">${L.replace(`<option>${s.layout}</option>`,`<option selected>${s.layout}</option>`)}</select>
+    <div class="grow"><b>${esc(s.graphic.asset==='icons'?'Icon card — '+s.graphic.label:s.graphic.asset==='broll'?'Stock video — '+s.graphic.label:s.graphic.asset==='photo'?'Your photo':(META.assets[s.graphic.asset+'/'+s.graphic.mode]||s.graphic.label))}</b><div class="mini">${esc(s.caption||s.text||'')}</div></div>
+    ${s.layout==='overlay'?'':`<select onchange="ops([{op:'scene_update',id:'${s.id}',layout:this.value}],true)">${L.replace(`<option>${s.layout}</option>`,`<option selected>${s.layout}</option>`)}</select>`}
     <label class="sw"><input type="checkbox" ${s.enabled!==false?'checked':''} onchange="ops([{op:'scene_update',id:'${s.id}',enabled:this.checked}],true)"><span></span></label></div>`}).join('')+
    `<h3>Add a graphic</h3><div style="display:flex;gap:8px;flex-wrap:wrap"><select id="gA" style="max-width:100%">${Object.entries(META.assets).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select><input id="gP" placeholder="when I say… (or leave empty: at the current video time)" style="flex:1;min-width:200px;padding:8px;border:1px solid var(--line);border-radius:9px"><button class="btn sm pri" onclick="addGraphic()">Add</button></div>
    <p class="mini">To add your own pictures, open the <b>Photos</b> tab.</p>
@@ -203,29 +203,38 @@ function renderAll(r){
 function keeps(){const d=P.source.duration,c=P.cuts.filter(c=>c.enabled).map(c=>[Math.max(0,c.start),Math.min(d,c.end)]).sort((a,b)=>a[0]-b[0]);const m=[];
   for(const [a,b] of c){if(b<=a)continue;if(m.length&&a<=m[m.length-1][1]+.05)m[m.length-1][1]=Math.max(m[m.length-1][1],b);else m.push([a,b])}
   const k=[];let t=0;for(const [a,b] of m){if(a-t>.12)k.push([t,a]);t=b}if(d-t>.12)k.push([t,d]);return k}
-let PHOTOS=[], SEL=null;
+let PHOTOS=[], SEL=null, SELV=null, STOCK=[], STOCKQ='';
 function toOut(t){let o=0;for(const [a,b] of keeps()){if(t<a)return o;if(t<=b)return o+(t-a);o+=b-a}return o}
 async function loadPhotos(){try{PHOTOS=(await api(`/api/projects/${PID}/photos`)).photos||[]}catch(e){PHOTOS=[]}}
 async function renderPhotos(){
   await loadPhotos();
   if(SEL&&!PHOTOS.includes(SEL))SEL=null;
   const TR=P.captions.translations||{}, hasTr=Object.values(TR).some(v=>(v||'').trim()), ar=P.language==='ar';
-  const ps=P.scenes.filter(s=>s.graphic.asset==='photo');
+  const ps=P.scenes.filter(s=>s.graphic.asset==='photo'||s.graphic.asset==='broll');
+  const thumb=s=>s.graphic.asset==='photo'?`/media/${PID}/photo_${s.graphic.mode}.jpg`:`/media/${PID}/broll_${s.graphic.mode}.jpg`;
+  const any=SEL||SELV;
   const lib=PHOTOS.map(id=>`<button class="ph ${id===SEL?'on':''}" data-ph="${id}" title="Select this photo"><img src="/media/${PID}/photo_${id}.jpg" alt=""></button>`).join('');
   const rows=P.analysis.sentences.map((x,i)=>{
     const here=ps.filter(s=>s.start+0.15>=x.start&&s.start+0.15<x.end);
     return `<div class="row prow" style="align-items:flex-start">
       <span class="t" onclick="setVideo('preview');setTimeout(()=>seek(${toOut(x.start).toFixed(2)}),300)">${fmt(toOut(x.start))}</span>
       <div class="grow"><div dir="auto" style="${ar?'font-size:16px;font-family:Tajawal,Inter,sans-serif':''}">${esc(x.text)}</div>${hasTr&&TR[i]?`<div class="mini" dir="auto">${esc(TR[i])}</div>`:''}
-        ${here.map(s=>`<div class="pin"><img src="/media/${PID}/photo_${s.graphic.mode}.jpg" alt=""><span class="mini grow">${esc(s.caption||'Photo')} · ${s.layout}</span><button class="btn sm" onclick="ops([{op:'delete_scene',id:'${s.id}'}],true)">Remove</button></div>`).join('')}</div>
-      <button class="btn sm ${SEL?'pri':''}" ${SEL?'':'disabled'} onclick="placePhoto(${i})">Add photo here</button></div>`}).join('');
+        ${here.map(s=>`<div class="pin"><img src="${thumb(s)}" alt=""><span class="mini grow">${esc(s.graphic.asset==='broll'?'Stock video':(s.caption||'Photo'))} · ${s.layout}</span><button class="btn sm" onclick="ops([{op:'delete_scene',id:'${s.id}'}],true)">Remove</button></div>`).join('')}</div>
+      <button class="btn sm ${any?'pri':''}" ${any?'':'disabled'} onclick="placePhoto(${i})">${SELV?'Add video here':'Add photo here'}</button></div>`}).join('');
+  const stock=META.stock?`<h3>Stock videos <span class="mini">— free footage, <a href="https://www.pexels.com" target="_blank" rel="noopener">videos provided by Pexels</a></span></h3>
+   <div style="display:flex;gap:8px"><input id="stQ" value="${esc(STOCKQ)}" placeholder="search in English, e.g. inhaler, lungs, jogging" style="flex:1;padding:8px;border:1px solid var(--line);border-radius:9px"><button class="btn sm" id="stGo">Search</button></div>
+   <div class="phlib">${STOCK.map(v=>`<button class="ph ${v.id===SELV?'on':''}" data-st="${v.id}" title="${esc((v.user||'')+' · '+(v.duration||'')+'s')}"><img src="${esc(v.image||'')}" alt="" referrerpolicy="no-referrer"></button>`).join('')}</div>`
+   :`<p class="mini">Want real footage too? Add a free Pexels key (PEXELS_API_KEY) to unlock stock videos.</p>`;
   $('#tab-photos').innerHTML=`<p class="mini" style="margin-top:0">1. Upload your photos (clinic, team, equipment, a scan you're allowed to share). 2. Click a photo to select it. 3. Press <b>Add photo here</b> next to the sentence where it should appear. Never use a photo that shows a patient without written consent.</p>
    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input type="file" id="phF" accept="image/jpeg,image/png,image/webp" multiple><button class="btn sm pri" id="phUp">Upload</button>
    <input id="phC" placeholder="caption for the next photo you add (optional)" maxlength="80" style="flex:1;min-width:180px;padding:8px;border:1px solid var(--line);border-radius:9px"></div>
    <div class="phlib">${lib||'<span class="mini">No photos yet.</span>'}</div>
+   ${stock}
    <div style="display:flex;align-items:center;gap:8px;margin:14px 0 4px"><h3 style="margin:0" class="grow">Your script</h3>${!hasTr&&P.language!=='en'?`<button class="btn sm" id="trBtn">Show English translation</button>`:''}</div>
    ${rows}`;
-  $$('[data-ph]').forEach(b=>b.onclick=()=>{SEL=b.dataset.ph===SEL?null:b.dataset.ph;renderPhotos()});
+  $$('[data-ph]').forEach(b=>b.onclick=()=>{SEL=b.dataset.ph===SEL?null:b.dataset.ph;SELV=null;renderPhotos()});
+  $$('[data-st]').forEach(b=>b.onclick=()=>{const v=+b.dataset.st;SELV=v===SELV?null:v;SEL=null;renderPhotos()});
+  if($('#stGo')){$('#stGo').onclick=searchStock;$('#stQ').onkeydown=e=>{if(e.key==='Enter')searchStock()}}
   $('#phUp').onclick=uploadPhotos;
   if($('#trBtn'))$('#trBtn').onclick=()=>ops([{op:'translate_captions',target:'en'}],false);
 }
@@ -234,7 +243,11 @@ async function uploadPhotos(){const fs=[...$('#phF').files];if(!fs.length){toast
     const r=await fetch(`/api/projects/${PID}/photos`,{method:'POST',body:fd,credentials:'same-origin',headers:{'X-CSRF-Token':CSRF}});
     const j=await r.json().catch(()=>({}));if(!r.ok){toast(j.error||'Upload failed');return}SEL=j.photo}
   toast(fs.length>1?`${fs.length} photos uploaded — the last one is selected.`:'Photo uploaded and selected — now press “Add photo here” next to a sentence.');renderPhotos()}
-async function placePhoto(i){if(!SEL)return;await ops([{op:'add_photo',photo:SEL,sentence:i,caption:$('#phC').value.trim()}],true)}
+async function searchStock(){STOCKQ=$('#stQ').value.trim();if(!STOCKQ)return;const r=await fetch('/api/stock/search?q='+encodeURIComponent(STOCKQ),{credentials:'same-origin'});
+  const j=await r.json().catch(()=>({}));if(!r.ok){toast(j.error||'Search failed');return}STOCK=j.results||[];SELV=null;if(!STOCK.length)toast('No videos found — try other words.');renderPhotos()}
+async function placePhoto(i){
+  if(SELV){toast('Downloading the video…');const r=await post(`/api/projects/${PID}/stock`,{video_id:SELV,sentence:i});if(r&&r.message)toast(r.message);SELV=null;await waitJob();await openProject(PID);setVideo('preview');return}
+  if(!SEL)return;await ops([{op:'add_photo',photo:SEL,sentence:i,caption:$('#phC').value.trim()}],true)}
 function playheadOut(){const v=$('#vid');return view==='preview'||view==='final'?(v.currentTime||0):0}
 function addGraphic(){const ph=$('#gP').value.trim();const o={op:'add_graphic',asset:$('#gA').value};if(ph)o.phrase=ph;else o.t_out=playheadOut();ops([o],true)}
 async function ops(o,render){const r=await post(`/api/projects/${PID}/ops`,{ops:o,render:!!render});toast(r.message);if(render){await waitJob();}await openProject(PID);if(render)setVideo('preview')}

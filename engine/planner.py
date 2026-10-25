@@ -101,6 +101,32 @@ def build_plan(source_path, asr_backend, words, analysis, style="modern_educatio
     for a, b in zip(scenes, scenes[1:]):
         if presenter and a["layout"] == b["layout"] and b["layout"] in rot: b["layout"] = rot[b["layout"]]
 
+    # icon cards: any specialty — concepts the doctor names (lungs, inhaler, smoking…) pop up in the gaps
+    from . import concepts as CO
+    pad_ = 0.8 if presenter else 0.3
+    busy = [(sc["start"] - pad_, sc["end"] + pad_) for sc in scenes]
+    gap_ic = 1.5 if presenter else 0.4  # with no presenter the visuals can follow each other closely
+    icons, last_ic = [], -99.0
+    for sen in sents:
+        hits = CO.find(words[sen["i0"]: sen["i1"] + 1])
+        if not hits: continue
+        t0 = words[sen["i0"] + hits[0][0]]["start"] - 0.15
+        if t0 < (5.0 if presenter else 3.5): continue
+        if t0 - last_ic < gap_ic:
+            later = [(i, k) for i, k in hits if words[sen["i0"] + i]["start"] - 0.15 >= last_ic + gap_ic]  # start at a later concept
+            if not later: continue
+            hits = later; t0 = words[sen["i0"] + hits[0][0]]["start"] - 0.15
+        if any(a <= t0 <= b for a, b in busy): continue
+        items = [{"key": k, "at": round(max(0.0, words[sen["i0"] + i]["start"] - 0.15 - t0), 2)} for i, k in hits if words[sen["i0"] + i]["start"] - t0 < 3.2][:3]
+        end = max(t0 + 2.8, t0 + items[-1]["at"] + 1.8)
+        end = min(end, t0 + 4.5, dur, min([a for a, b in busy if a > t0] + [dur]) - 0.2)
+        if end - t0 < 2.0: continue
+        icons.append({"id": _id("scn"), "start": round(t0, 3), "end": round(end, 3), "layout": "overlay",
+                      "graphic": {"asset": "icons", "mode": "card", "label": " · ".join(CO.label(k, "en") for k in (it["key"] for it in items)), "items": items},
+                      "text": sen["text"], "auto": True, "enabled": True})
+        last_ic = end
+    scenes = sorted(scenes + icons, key=lambda x: x["start"])
+
     # keyword emphasis punch-ins on first mention of key terms outside graphic scenes
     emph = []
     words_t = {t["start_idx"]: t for t in analysis["terms"]}
