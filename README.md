@@ -16,7 +16,15 @@ render queue.
 After the first edit, the doctor reviews it in the **studio**: toggle cuts, fix the transcript, change layouts, ask for changes in
 plain language ("make the subtitles more dynamic"), check the flagged claims, then export 1080×1920 MP4 + .srt.
 
-## Run it locally (test mode — no Stripe needed)
+## Test it on your own computer (Windows / Mac) — easiest
+Install Docker Desktop, download this repository, open a terminal in its folder and run:
+```bash
+docker compose -f docker-compose.local.yml up --build
+```
+The first start downloads ~2 GB of models (15–30 min). Then open http://localhost:8080.
+Test mode: choosing a plan activates it without payment. Stop with Ctrl+C; your videos are kept for next time.
+
+## Run it locally without Docker (test mode — no Stripe needed)
 ```bash
 pip install -r requirements.txt            # needs ffmpeg on PATH
 bash tools/setup_models.sh                 # ~2.5 GB of models into ../models  (WITH_LARGE=1 for Whisper large-v3)
