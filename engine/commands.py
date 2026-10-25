@@ -12,7 +12,7 @@ OPS_SCHEMA = {
     "set_style": {"style": list(P.STYLES)}, "caption_dynamism": {"delta": "int"}, "set_caption_style": {"style": P.CAPTION_STYLES},
     "captions_enabled": {"enabled": "bool"}, "cut_range": {"start_out": "sec", "end_out": "sec"}, "remove_pause_near": {"t_out": "sec"},
     "cut_phrase": {"phrase": "str"}, "enable_cuts": {"reason": "silence|retake|filler"}, "approve_fillers": {}, "restore_all_cuts": {"reason": "silence|retake|filler|manual|any"},
-    "add_graphic": {"asset": "coronary/narrowing|coronary/occlusion|coronary/stent|ecg/sinus|bp/gauge|ct/calcium", "phrase": "str?", "t_out": "sec?", "layout": "layout?"},
+    "add_graphic": {"asset": "coronary/narrowing|coronary/occlusion|coronary/stent|ecg/sinus|bp/gauge|ct/calcium|ct/scanner|heart/coronaries", "phrase": "str?", "t_out": "sec?", "layout": "layout?"},
     "remove_graphics": {"asset": "str?"}, "set_layout": {"asset": "str?", "layout": P.LAYOUTS}, "face_visible": {},
     "set_music": {"track": P.MUSIC_TRACKS + ["next", "off", "on"]}, "music_volume": {"delta_db": "int"},
     "zoom": {"delta": "float"}, "caption_mode": {"mode": "original|translated|both", "target": "en|fr|ar"},
@@ -21,7 +21,8 @@ OPS_SCHEMA = {
 
 ASSET_WORDS = [("coronary/stent", r"stent|angioplast|balloon"), ("coronary/occlusion", r"clot|heart attack|infarct|ruptur|occlu"),
                ("coronary/narrowing", r"plaque|cholesterol|narrow|atheroscl|coronary|artery|arteries|heart animation"),
-               ("ct/calcium", r"calcium|agatston|ct scan|scanner|كالسيوم|كلس|سكانر"), ("ecg/sinus", r"\becg\b|\bekg\b|rhythm|electrocardio"), ("bp/gauge", r"blood pressure|\bbp\b")]
+               ("ct/calcium", r"calcium|agatston|كالسيوم|كلس"), ("ct/scanner", r"ct scan|scanner|سكانر|coroscanner"),
+               ("heart/coronaries", r"heart|coronary tree|coronaries|قلب"), ("ecg/sinus", r"\becg\b|\bekg\b|rhythm|electrocardio"), ("bp/gauge", r"blood pressure|\bbp\b")]
 LAYOUT_WORDS = [("pip", r"picture.in.picture|\bpip\b|bubble|circle|corner"), ("split", r"split"), ("side", r"beside|side by side|next to me|card"),
                 ("full_graphic", r"full.?screen (animation|graphic)|only the animation|hide (me|my face)"), ("labels", r"label|overlay"), ("full", r"just me|no graphic")]
 
@@ -221,16 +222,24 @@ def apply(plan, op):
         plan["cuts"].append({"id": f"cut_{uuid.uuid4().hex[:6]}", "start": round(s["start"] - 0.05, 3), "end": round(s["end"] + 0.05, 3),
                              "reason": "manual", "enabled": True, "auto": False, "note": f"Removed: “{s['text']}”"})
         return f"Removed the sentence “{s['text']}”."
+    if o == "add_photo":  # a photo the doctor uploaded (saved as photos/<id>.jpg by the API)
+        pid = str(op.get("photo", ""))
+        if not re.fullmatch(r"[0-9a-f]{12}", pid): return "Unknown photo."
+        op = {**op, "op": "add_graphic", "asset": f"photo/{pid}", "layout": op.get("layout") or ("split" if plan.get("presenter", True) else "full_graphic")}
+        o = "add_graphic"
     if o == "add_graphic":
-        asset, mode = op["asset"].split("/")
-        if "phrase" in op and op["phrase"]:
+        asset, mode = op["asset"].split("/", 1)
+        s = None
+        if (op.get("phrase") or "").strip():
             i = _find_phrase(plan, op["phrase"])
             if i is None: return f"Couldn't find where you discuss “{op['phrase']}”."
             s = _sentence_of(plan, i); a, b = s["start"] - 0.1, s["end"] + 0.3
         else:
-            a, _ = tl.to_src(op.get("t_out", 0)); b = a + 5
+            a, _ = tl.to_src(float(op.get("t_out") or 0)); b = a + 5
         if b - a < 4.5: b = a + 4.5
-        default_layout = {"stent": "pip", "occlusion": "split", "narrowing": "side", "sinus": "side", "gauge": "labels", "calcium": "side"}[mode]
+        if asset == "photo": b = max(b, a + 4.0)
+        default_layout = "split" if asset == "photo" else {"stent": "pip", "occlusion": "split", "narrowing": "side", "sinus": "side", "gauge": "labels", "calcium": "split",
+                          "scanner": "split", "coronaries": "split"}.get(mode, "split")
         kept = []
         for x in plan["scenes"]:
             ov = min(x["end"], b) - max(x["start"], a)
@@ -241,9 +250,11 @@ def apply(plan, op):
                 kept.append(x)
         plan["scenes"] = kept
         plan["scenes"].append({"id": f"scn_{uuid.uuid4().hex[:6]}", "start": round(a, 3), "end": round(b, 3), "layout": op.get("layout") or default_layout,
-                               "graphic": {"asset": asset, "mode": mode, "label": op["asset"]}, "text": s["text"] if "phrase" in op else "", "auto": False, "enabled": True})
+                               "graphic": {"asset": asset, "mode": mode, "label": "Photo" if asset == "photo" else op["asset"]}, "text": s["text"] if s else "",
+                               "auto": False, "enabled": True, **({"caption": str(op.get("caption") or "")[:80]} if asset == "photo" else {})})
         plan["scenes"].sort(key=lambda x: x["start"])
-        return f"Added the {op['asset'].replace('/', ' ')} animation at {tl.to_out(a):.1f}s ({op.get('layout') or default_layout} layout)."
+        what = "photo" if asset == "photo" else f"{op['asset'].replace('/', ' ')} animation"
+        return f"Added the {what} at {tl.to_out(a):.1f}s ({op.get('layout') or default_layout} layout)."
     if o == "remove_graphics":
         before = len(plan["scenes"])
         plan["scenes"] = [x for x in plan["scenes"] if op.get("asset") and f"{x['graphic']['asset']}/{x['graphic']['mode']}" != op["asset"]]

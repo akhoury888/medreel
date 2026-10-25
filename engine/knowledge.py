@@ -46,6 +46,14 @@ def core(w: str) -> str:
 FILLERS = {"um", "umm", "uh", "uhh", "erm", "er", "hmm", "mm", "ah", "eh",
            "امم", "اممم", "مم", "ممم", "ام", "اا", "ااا", "اه", "اهه", "ايه"}
 FILLERS |= {"euh", "heu", "euhh", "hum", "bah"}
+HESITATION_RE = re.compile(r"^(?:ا{2,}|ا?م{2,}|اه{2,}|ه?م{2,}|اا+م+|u+h+|u+m+|uhm+|e+r+m+|h+m+|m{2,}|e+m{2,}|e+u+h+|h+e+u+|a{2,}h*|e{2,}h*)$")
+
+
+def is_hesitation(text):
+    """Pure hesitation sounds ('ااا', 'إمم', 'euh', 'um') — never real words, so they are always cut."""
+    return bool(HESITATION_RE.match(norm(text or "").strip("'")))
+
+
 SOFT_FILLERS = {"يعني", "ya3ne", "ya3ni", "yaane", "so", "okay", "well", "oh", "ah", "ben", "bon", "voila", "enfin"}  # only when isolated
 FILLER_PHRASES = [("you", "know"), ("i", "mean"), ("sort", "of"), ("kind", "of")]
 
@@ -106,12 +114,16 @@ GRAPHIC_RULES = [
     ("coronary", "occlusion", [r"\bclot\b", r"\bheart attack", r"\bmyocardial infarction", r"\bplaque ruptur", r"\bruptures?\b",
                                r"\bblock(?:s|ed)? the artery", r"جلط|ذبح|انسد|بتسكر|بيسكر|سكر الشريان|انفجر|تمزق",
                                r"caillot|infarctus|crise cardiaque|rupture de (?:la )?plaque|bouche l'artere|obstru"], 9, "split", "Plaque rupture → clot"),
-    ("coronary", "narrowing", [r"\bcholesterol", r"\bplaque", r"\batherosclero", r"\bnarrow", r"\bcoronary arter",
-                               r"كوليسترول|كولسترول|لويح|ترسب|تضيق|بيضيق|يضيق|بضيق الشريان|تصلب|شرايين التاجي|الشرايين التاجي",
-                               r"cholesterol|atherosclerose|retreci|stenose|arteres? coronaires?|depots? de graisse"], 8, "side", "Plaque narrows the artery"),
-    ("ct", "calcium", [r"\bcalcium", r"\bagatston", r"\bct scan", r"\bcoronary ct", r"\bscanner",
-                       r"كالسيوم|كلس|تكلس|سكانر|سكانير|مقطعي|سيتي سكان|كالسيوم سكور",
-                       r"score calcique|coroscanner|scanner (?:coronaire|cardiaque)"], 8.5, "split", "Coronary calcium score"),
+    ("coronary", "narrowing", [r"\bcholesterol", r"\bplaque", r"\batherosclero", r"\bnarrow",
+                               r"كوليسترول|كولسترول|لويح|ترسب|تضيق|بيضيق|يضيق|بضيق الشريان|تصلب",
+                               r"cholesterol|atherosclerose|retreci|stenose|depots? de graisse"], 8, "side", "Plaque narrows the artery"),
+    ("ct", "calcium", [r"\bcalcium", r"\bagatston", r"كالسيوم|كلس|تكلس|كالسيوم سكور", r"score calcique"], 8.5, "split", "Coronary calcium score"),
+    ("ct", "scanner", [r"\bct scan", r"\bcoronary ct", r"\bcardiac ct", r"\bct angiogra", r"\bscanner\b", r"\bcoroscanner",
+                       r"سكانر|سكانير|مقطعي|سيتي سكان|كوروسكانر|كورو سكانر",
+                       r"coroscanner|scanner (?:coronaire|cardiaque)|scanner"], 8.2, "split", "Coronary CT scan"),
+    ("heart", "coronaries", [r"\bcoronary arter", r"arteries of the heart", r"\bheart arter", r"\bcoronar",
+                             r"شرايين القلب|شرايين تاجي|الشرايين التاجي|شريان القلب|شرايين قلب",
+                             r"arteres? coronaires?|arteres du coeur|coronaires"], 7.8, "split", "Coronary arteries"),
     ("ecg", "sinus", [r"\becg\b", r"\bekg\b", r"\belectrocardiogram", r"\bheart rhythm", r"\barrhythmi", r"\bpalpitation",
                       r"\batrial fibrillation", r"تخطيط|خفقان|رجفان|دقات القلب",
                       r"electrocardiogramme|rythme cardiaque|arythmie|palpitation|fibrillation"], 7, "side", "ECG"),
@@ -169,17 +181,21 @@ def detect_terms(words):
     return out
 
 
-def match_graphic(text: str):
-    best = None
+def match_graphics(text: str):
+    """Every graphic this sentence could illustrate, best first (the planner picks for variety)."""
+    out = []
     t = _match_text(text)
     for asset, mode, pats, prio, layout, label in GRAPHIC_RULES:
         for p in pats:
             if re.search(p, t):
                 if asset == "bp" and BP_RE.search(t): prio = 11
-                if not best or prio > best["priority"]:
-                    best = {"asset": asset, "mode": mode, "priority": prio, "layout": layout, "label": label}
-                break
-    return best
+                out.append({"asset": asset, "mode": mode, "priority": prio, "layout": layout, "label": label}); break
+    return sorted(out, key=lambda g: -g["priority"])
+
+
+def match_graphic(text: str):
+    m = match_graphics(text)
+    return m[0] if m else None
 
 
 def flag_claims(text: str):

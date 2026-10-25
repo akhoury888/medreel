@@ -71,7 +71,9 @@ def text_sprite(text, fnt, fill=(255, 255, 255), stroke=0, stroke_fill=(0, 0, 0)
     """Render text to an RGBA numpy array (Arabic text is shaped right-to-left in an Arabic face)."""
     if has_ar(text) and "tajawal" not in (getattr(fnt, "path", "") or "").lower():
         fnt = font("Tajawal", _weight_of(fnt), int(fnt.size * 1.08))
-    dk = {} if has_ar(text) else {"direction": "ltr"}  # "≥300" must not be reordered by bidi guessing
+    # Arabic lines are always laid out right-to-left (a line that starts with "coroscanner" must not flip to LTR);
+    # Latin-only text is forced LTR so "≥300" is never reordered by bidi guessing
+    dk = {"direction": "rtl"} if has_ar(text) else {"direction": "ltr"}
     l, t, r, b = fnt.getbbox(text, stroke_width=stroke, **dk)
     w, h = r - l + 2 * pad + shadow * 2, b - t + 2 * pad + shadow * 2
     im = Image.new("RGBA", (max(1, w), max(1, h)), (0, 0, 0, 0))

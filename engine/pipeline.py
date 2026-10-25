@@ -36,6 +36,8 @@ def analyze_and_plan(d, src, style="modern_educational", branding=None, log=prin
     json.dump(an, open(os.path.join(d, "analysis.json"), "w"))
     p(0.75, "Building the editing plan…")
     plan = P.build_plan(src, backend, words, an, style=style, branding=branding, language=lang)
+    if title and len(title) <= 60:  # the doctor's own title beats a sentence picked from the transcript
+        plan["title"].update({"text": title, "enabled": True})
     plan["mode"] = "auto_edit"
     P.save(plan, os.path.join(d, "plan.json"), history=False)
     p(0.8, "Plan ready.")
@@ -87,6 +89,7 @@ def create(d, mode, src=None, script=None, style="modern_educational", branding=
         if coverage < 0.35:
             plan["analysis"]["qa"]["issues"].append({"area": "script", "level": "warn",
                 "msg": "The recording doesn't follow the script closely — check caption timing, or switch to automatic captions."})
+    if title and len(title) <= 60: plan["title"].update({"text": title, "enabled": True})
     plan["mode"] = mode
     P.save(plan, os.path.join(d, "plan.json"), history=False)
     p(0.8, "Plan ready.")

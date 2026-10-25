@@ -148,10 +148,12 @@ function renderAll(r){
   // graphics
   const L=META.layouts.map(l=>`<option>${l}</option>`).join('');
   $('#tab-gfx').innerHTML=(P.scenes.length?'':'<p class="mut">No graphics yet.</p>')+P.scenes.map(s=>{const ot=o.scenes[s.id]||[];return `<div class="row"><span class="t" onclick="setVideo('preview');setTimeout(()=>seek(${ot[0]}),300)">${fmt(ot[0])}</span>
-    <div class="grow"><b>${esc(META.assets[s.graphic.asset+'/'+s.graphic.mode]||s.graphic.label)}</b><div class="mini">${esc(s.text||'')}</div></div>
+    <div class="grow"><b>${esc(META.assets[s.graphic.asset+'/'+s.graphic.mode]||s.graphic.label)}</b><div class="mini">${esc(s.caption||s.text||'')}</div></div>
     <select onchange="ops([{op:'scene_update',id:'${s.id}',layout:this.value}],true)">${L.replace(`<option>${s.layout}</option>`,`<option selected>${s.layout}</option>`)}</select>
     <label class="sw"><input type="checkbox" ${s.enabled!==false?'checked':''} onchange="ops([{op:'scene_update',id:'${s.id}',enabled:this.checked}],true)"><span></span></label></div>`}).join('')+
-   `<h3>Add a graphic</h3><div style="display:flex;gap:8px"><select id="gA">${Object.entries(META.assets).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select><input id="gP" placeholder="when I say… (e.g. angioplasty)" style="flex:1;padding:8px;border:1px solid var(--line);border-radius:9px"><button class="btn sm pri" onclick="ops([{op:'add_graphic',asset:gA.value,phrase:gP.value}],true)">Add</button></div>
+   `<h3>Add a graphic</h3><div style="display:flex;gap:8px;flex-wrap:wrap"><select id="gA" style="max-width:100%">${Object.entries(META.assets).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select><input id="gP" placeholder="when I say… (or leave empty: at the current video time)" style="flex:1;min-width:200px;padding:8px;border:1px solid var(--line);border-radius:9px"><button class="btn sm pri" onclick="addGraphic()">Add</button></div>
+   <h3>Add a photo</h3><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input type="file" id="phF" accept="image/jpeg,image/png,image/webp"><input id="phC" placeholder="caption (optional)" maxlength="80" style="flex:1;min-width:140px;padding:8px;border:1px solid var(--line);border-radius:9px"><input id="phP" placeholder="when I say… (or current time)" style="flex:1;min-width:160px;padding:8px;border:1px solid var(--line);border-radius:9px"><button class="btn sm pri" onclick="addPhoto()">Add photo</button></div>
+   <p class="mini">Your clinic, your team, a scan you're allowed to share — never a photo that shows a patient without written consent.</p>
    <p class="mini">Layouts: full · side (card beside you) · pip (you in a bubble over the animation) · full_graphic (animation only, your voice continues) · split · labels (floating card).</p>`;
   // transcript
   const keep=keeps(), kw=new Set();(P.analysis.terms||[]).forEach(t=>{for(let i=t.start_idx;i<=t.end_idx;i++)kw.add(i)});
@@ -197,6 +199,13 @@ function renderAll(r){
 function keeps(){const d=P.source.duration,c=P.cuts.filter(c=>c.enabled).map(c=>[Math.max(0,c.start),Math.min(d,c.end)]).sort((a,b)=>a[0]-b[0]);const m=[];
   for(const [a,b] of c){if(b<=a)continue;if(m.length&&a<=m[m.length-1][1]+.05)m[m.length-1][1]=Math.max(m[m.length-1][1],b);else m.push([a,b])}
   const k=[];let t=0;for(const [a,b] of m){if(a-t>.12)k.push([t,a]);t=b}if(d-t>.12)k.push([t,d]);return k}
+function playheadOut(){const v=$('#vid');return view==='preview'||view==='final'?(v.currentTime||0):0}
+function addGraphic(){const ph=$('#gP').value.trim();const o={op:'add_graphic',asset:$('#gA').value};if(ph)o.phrase=ph;else o.t_out=playheadOut();ops([o],true)}
+async function addPhoto(){const f=$('#phF').files[0];if(!f){toast('Choose a photo first.');return}
+  const fd=new FormData();fd.append('photo',f);fd.append('caption',$('#phC').value);fd.append('phrase',$('#phP').value);fd.append('t_out',playheadOut());
+  const r=await fetch(`/api/projects/${PID}/photos`,{method:'POST',body:fd,credentials:'same-origin',headers:{'X-CSRF-Token':CSRF}});
+  const j=await r.json().catch(()=>({}));if(!r.ok){toast(j.error||j.message||'Upload failed');return}
+  toast(j.message);await waitJob();await openProject(PID);setVideo('preview')}
 async function ops(o,render){const r=await post(`/api/projects/${PID}/ops`,{ops:o,render:!!render});toast(r.message);if(render){await waitJob();}await openProject(PID);if(render)setVideo('preview')}
 async function cmdRun(text){if(!text.trim())return;const r=await post(`/api/projects/${PID}/command`,{text});toast(r.message);if(r.ok){await waitJob();await openProject(PID);setVideo('preview')}}
 $('#cmdBtn').onclick=()=>{cmdRun($('#cmd').value);$('#cmd').value=''};$('#cmd').onkeydown=e=>{if(e.key==='Enter')$('#cmdBtn').click()};

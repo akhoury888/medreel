@@ -11,6 +11,7 @@ from PIL import Image, ImageDraw
 from .draw import (font, font_for, fit_font, text_sprite, blit, rounded_mask, shadow_rect, scale_rgba, ease_out_cubic, ease_in_out,
                    ease_out_back, lerp, clamp, hex2rgb, draw_arrow)
 from . import graphics as G, planner as P, knowledge as K, music as M
+from . import graphics_pro as GP
 
 # ---------------- layouts (fractions of W,H) ----------------
 # doc: rect, r(adius frac of W), fx/fy (face position inside rect), face (face-height fraction; None=use zoom), alpha
@@ -20,7 +21,7 @@ LAYOUT = {
     "side":         dict(doc=(0, 0, 1, 1), dr=0, fx=.76, fy=.28, face=None, zm=1.6, da=1, gfx=(.03, .40, .53, .32), gr=.04, ga=1),
     "pip":          dict(doc=(.60, .085, .34, .34 * 9 / 16), dr=.17, fx=.5, fy=.47, face=.46, zm=1, da=1, gfx=(0, 0, 1, 1), gr=0, ga=1),
     "full_graphic": dict(doc=(.66, .10, .22, .22 * 9 / 16), dr=.11, fx=.5, fy=.47, face=.46, zm=1, da=0, gfx=(0, 0, 1, 1), gr=0, ga=1),
-    "split":        dict(doc=(0, .5, 1, .5), dr=0, fx=.5, fy=.42, face=.40, zm=1, da=1, gfx=(0, 0, 1, .5), gr=0, ga=1),
+    "split":        dict(doc=(0, .5, 1, .5), dr=0, fx=.5, fy=.47, face=.33, zm=1, da=1, gfx=(0, 0, 1, .5), gr=0, ga=1),
     "labels":       dict(doc=(0, 0, 1, 1), dr=0, fx=.5, fy=.30, face=None, zm=1, da=1, gfx=(.05, .47, .90, .26), gr=.035, ga=1),
 }
 GRADES = {
@@ -85,7 +86,7 @@ class Captions:
         self.style = style or plan["captions"]["style"]; self.W, self.H = W, H; self.accent = accent
         self.s = W / 1080 * scale
         cuts = [(c["start"], c["end"]) for c in plan["cuts"] if c["enabled"]]
-        kept = lambda w: not w.get("deleted") and not any(a <= (w["start"] + w["end"]) / 2 <= b for a, b in cuts) and tl.is_kept((w["start"] + w["end"]) / 2)
+        kept = lambda w: not w.get("deleted") and not K.is_hesitation(w["text"]) and not any(a <= (w["start"] + w["end"]) / 2 <= b for a, b in cuts) and tl.is_kept((w["start"] + w["end"]) / 2)
         words = []
         if source == "original":
             kw = set()
@@ -195,11 +196,13 @@ class Captions:
         self.cache[key] = arr
         return arr
 
-    def draw(self, canvas, T, avoid, force_top=None):
-        """Draws the current group; returns its (top, bottom) in px, or None."""
+    def draw(self, canvas, T, avoid, force_top=None, layout_key=None):
+        """Draws the current group; returns its (top, bottom) in px, or None. The position is re-chosen
+        when the layout changes mid-line (a graphic appearing moves the face)."""
         H, W = canvas.shape[:2]
         for gi, g in enumerate(self.groups):
             if not (g["s"] <= T < g["e"]): continue
+            if layout_key != "keep" and g.get("lk", "∅") != layout_key: g["y"] = None; g["lk"] = layout_key
             active = max([i for i, w in enumerate(g["words"]) if w["s"] <= T + 0.03] or [0])
             spr = self.sprite(gi, active)
             if force_top is not None:
@@ -207,12 +210,15 @@ class Captions:
                 blit(canvas, spr, (W - spr.shape[1]) / 2, force_top, al)
                 return (force_top, force_top + spr.shape[0])
             if g["y"] is None:
-                h = spr.shape[0] / H
-                for yc in (0.775, 0.70, 0.83, 0.62, 0.54, 0.30):
-                    box = (0.07, yc - h / 2, 0.93, yc + h / 2)
-                    if not any(box[0] < r[2] and r[0] < box[2] and box[1] < r[3] and r[1] < box[3] for r in avoid):
-                        g["y"] = yc; break
-                else: g["y"] = 0.775
+                h = spr.shape[0] / H; wf = spr.shape[1] / W
+                def ov(b, r): return max(0, min(b[2], r[2]) - max(b[0], r[0])) * max(0, min(b[3], r[3]) - max(b[1], r[1]))
+                best = None
+                for k, yc in enumerate((0.775, 0.70, 0.83, 0.62, 0.89, 0.50, 0.54, 0.46, 0.42, 0.38, 0.30)):
+                    box = (0.5 - wf / 2, yc - h / 2, 0.5 + wf / 2, yc + h / 2)
+                    if box[1] < 0.02 or box[3] > 0.97: continue
+                    pen = sum(ov(box, r[:4]) * (r[4] if len(r) > 4 else 1.0) for r in avoid) + k * 1e-4
+                    if best is None or pen < best[0]: best = (pen, yc)
+                g["y"] = best[1] if best else 0.775
             age = T - g["s"]
             if self.style == "pop":
                 sc = 0.78 + 0.22 * ease_out_back(age / 0.16); spr2 = scale_rgba(spr, sc); al = 1
@@ -333,8 +339,11 @@ def build_audio(plan, keeps, total, workdir, log):
         mp = os.path.join(workdir, f"music_{mus['track']}_{int(total)+2}.wav")
         if not os.path.exists(mp): M.generate(mus["track"], total + 2, mp)
         inputs += ["-i", mp]
-        fg += (f";[voice]asplit=2[v1][vsc];[1:a]atrim=0:{total:.3f},volume={mus.get('db', -24)}dB,afade=t=out:st={max(0, total-2.5):.3f}:d=2.5[m];"
-               f"[m][vsc]sidechaincompress=threshold=0.015:ratio=8:attack=15:release=350[md];[v1][md]amix=inputs=2:normalize=0:duration=first[aout]")
+        # music bed at a fixed loudness under the voice (-14 LUFS): db -24 -> about -29 LUFS, then gentle ducking while speaking
+        target = clamp(mus.get("db", -24) - 5, -40, -20)
+        fg += (f";[voice]asplit=2[v1][vsc];[1:a]atrim=0:{total:.3f},loudnorm=I={target:.1f}:TP=-3:LRA=7,aresample=44100,aformat=channel_layouts=stereo,"
+               f"afade=t=in:d=0.6,afade=t=out:st={max(0, total-2.5):.3f}:d=2.5[m];"
+               f"[m][vsc]sidechaincompress=threshold=0.03:ratio=3:attack=20:release=400[md];[v1][md]amix=inputs=2:normalize=0:duration=first[aout]")
     else:
         fg += ";[voice]anull[aout]"
     cmd = ["ffmpeg", "-y", "-v", "error", *inputs, "-filter_complex", fg, "-map", "[aout]", "-t", f"{total:.3f}", "-c:a", "aac", "-b:a", "192k", out]
@@ -422,6 +431,9 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
         a, b = tl.to_out(sc["start"]), tl.to_out(sc["end"])
         if b - a > 0.8: scenes.append((a, b, sc))
     emph = [(tl.to_out(e["start"]), tl.to_out(e["end"])) for e in plan.get("emphasis", []) if e.get("enabled", True)]
+    kw_pills = [(tl.to_out(e["start"]), e["term"]) for e in plan.get("emphasis", []) if e.get("enabled", True) and e.get("term")]
+    pill_cache = {}
+    GP.PHOTO_DIR = os.path.join(os.path.dirname(os.path.abspath(src["path"])), "photos")
     zp = plan["zoom"]; tr = plan["style_params"].get("transition", 0.4)
     logo = _logo(brand, int(150 * s), accent, sec)
     small_logo = scale_rgba(logo, (92 * s) / logo.shape[1])
@@ -430,7 +442,7 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
     bg = np.zeros((H, W, 3), np.uint8); bg[:] = sec
     presenter = plan.get("presenter", True)
     wm = text_sprite("Made with MedReel", font("Poppins", 700, int(30 * s)), (255, 255, 255), shadow=max(2, int(4 * s))) if plan["output"].get("watermark") else None
-    last_doc = None
+    last_doc = None; lower_y = None
     for n in range(nframes):
         T = n / fps
         if T >= tl.duration:  # outro
@@ -475,6 +487,7 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
             else:
                 fn = G.ASSETS[g["asset"]]
                 kw = {"title": g["title"]} if g.get("title") else {}
+                if g["asset"] == "photo" and scn.get("caption"): kw = {"title": scn["caption"]}
                 gfx_img = fn(max(32, int(gw)), max(32, int(gh)), gt, gd, mode=g["mode"], accent=accent, lang=glang, **kw)
         doc_full = dw >= W * 0.99 and dh >= H * 0.99
         def draw_doc():
@@ -510,19 +523,20 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
         if scn is not None and scn["layout"] == "split" and m > 0.01:
             cv2.line(canvas, (0, int(H * .5)), (int(W * m), int(H * .5)), accent, max(2, int(8 * s)))
         # avoid-zones for captions: face (when visible) + floating graphic card
-        avoid = []
+        avoid = []; face_box = None
         if not presenter:
             if scn is None: avoid.append((0, 0.6, 1, 1))  # captions sit mid-screen as kinetic type
         elif lay["da"] > 0.5:
             x0, y0, cw, ch = _crop(frame, face, (dw, dh), lay["fx"], lay["fy"], lay["face"], z, lay["zm"])
             fx0 = dx + (face[0] * DW - x0) / cw * dw; fy0 = dy + (face[1] * DH - y0) / ch * dh
             fx1 = fx0 + face[2] * DW / cw * dw; fy1 = fy0 + face[3] * DH / ch * dh
-            avoid.append((fx0 / W - .03, fy0 / H - .03, fx1 / W + .03, fy1 / H + .05))
+            face_box = (fx0 / W - .03, fy0 / H - .035, fx1 / W + .03, fy1 / H + .05)
+            avoid.append(face_box + (12.0,))  # covering the face costs far more than covering a graphic
             if not doc_full: avoid.append((dx / W, dy / H, (dx + dw) / W, (dy + dh) / H))
         if (gfx_img is not None or gfx_rgba is not None) and not (gw >= W * .99 and gh >= H * .99):
             avoid.append((gx / W, gy / H, (gx + gw) / W, (gy + gh) / H))
         if gw >= W * .99 and gh >= H * .99 and gfx_img is not None:
-            avoid.append((0, 0.12, 1, 0.70))  # vessel/labels band of full-screen animations
+            avoid.append((0, 0.12, 1, 0.80))  # main band of full-screen animations (slice, scale, scanner)
         # title (hook)
         if title and T < 3.4:
             ty = H * 0.115
@@ -533,14 +547,44 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
                 blit(canvas, spr2, (W - spr2.shape[1]) / 2, ty + dyy, a); ty += spr.shape[0] + 10 * s
             avoid.append((0, 0.1, 1, ty / H))
         # lower third
-        if lower is not None and 0.6 <= T < 5.0:
-            a = ease_out_cubic((T - 0.6) / 0.45) * min(1, (5.0 - T) / 0.35)
-            ly = H * (0.585 if presenter else 0.86)
+        if lower is not None and 0.6 <= T < 5.0 and (scn is None or m < 0.99):
+            a = ease_out_cubic((T - 0.6) / 0.45) * min(1, (5.0 - T) / 0.35) * (1 - (m if scn is not None else 0))
+            if lower_y is None:
+                lh, lw = lower.shape[0] / H, lower.shape[1] / W
+                lower_y = 0.86 if not presenter else 0.585
+                if face_box is not None:
+                    x0f = (1 - lw - 50 * s / W) if rtl else 50 * s / W
+                    for yc in (0.585, 0.66, 0.72, 0.78, 0.50):
+                        b = (x0f, yc, x0f + lw, yc + lh)
+                        if not (b[0] < face_box[2] and face_box[0] < b[2] and b[1] < face_box[3] and face_box[1] < b[3]): lower_y = yc; break
+            ly = H * lower_y
             lx = (W - 50 * s - lower.shape[1] + (1 - a) * 120 * s) if rtl else (50 * s - (1 - a) * 120 * s)
             blit(canvas, lower, lx, ly, a)
             avoid.append((0, ly / H, 1, (ly + lower.shape[0]) / H))
+        for ka, term in kw_pills:  # kinetic keyword: the medical term pops up as the doctor says it
+            age = T - ka
+            if not (0 <= age < 2.2) or scn is not None: continue
+            if term not in pill_cache:
+                f_ = font_for(term, "Poppins", 800, int(56 * s))
+                t_ = text_sprite(term, f_, (255, 255, 255), pad=0)
+                pw, ph = t_.shape[1] + int(64 * s), t_.shape[0] + int(34 * s)
+                pc = np.zeros((ph, pw, 4), np.uint8); pc[..., :3] = accent; pc[..., 3] = rounded_mask(pw, ph, ph // 2)
+                blit(pc, t_, int(32 * s), int(17 * s)); pill_cache[term] = pc
+            pc = pill_cache[term]
+            al = ease_out_cubic(age / 0.18) * min(1, (2.2 - age) / 0.3)
+            sc_ = 0.6 + 0.4 * ease_out_back(age / 0.28)
+            spr_ = scale_rgba(pc, sc_)
+            yk = None
+            for yc in (0.15, 0.22, 0.64, 0.70):
+                b = (0.5 - pc.shape[1] / W / 2, yc, 0.5 + pc.shape[1] / W / 2, yc + pc.shape[0] / H)
+                if face_box is None or not (b[0] < face_box[2] and face_box[0] < b[2] and b[1] < face_box[3] and face_box[1] < b[3]):
+                    if not (title and T < 3.6 and yc < 0.3): yk = yc; break
+            if yk is None: continue
+            blit(canvas, spr_, (W - spr_.shape[1]) / 2, yk * H + (pc.shape[0] - spr_.shape[0]) / 2, al)
+            avoid.append((0, yk, 1, yk + pc.shape[0] / H)); break
         if caps:
-            placed = caps.draw(canvas, T, avoid)
+            lk = None if (scn is None or m < 0.02) else scn["id"] if m > 0.97 else "keep"  # re-place once the layout has settled
+            placed = caps.draw(canvas, T, avoid, layout_key=lk)
             if caps2 and placed: caps2.draw(canvas, T, avoid, force_top=placed[1] - 6 * s)
         blit(canvas, small_logo, 40 * s, 52 * s, 0.85)
         if wm is not None: blit(canvas, wm, W - wm.shape[1] - 30 * s, H - wm.shape[0] - 40 * s, 0.8)

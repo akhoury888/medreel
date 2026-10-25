@@ -58,7 +58,9 @@ def detect_fillers(words, audio):
         else:
             isolated = (i == 0 or words[i]["start"] - words[i - 1]["end"] > 0.2) and (i + 1 == len(words) or words[i + 1]["start"] - words[i]["end"] > 0.15)
             isolated = isolated and words[i]["text"].rstrip()[-1:] in ",.،"
-        if (t in K.FILLERS and (isolated or not K.is_ar(t))) or (t in K.SOFT_FILLERS and isolated):
+        if K.is_hesitation(words[i]["text"]):
+            out.append({"start": words[i]["start"] - 0.03, "end": words[i]["end"] + 0.03, "text": words[i]["text"], "kind": "hesitation"})
+        elif (t in K.FILLERS and (isolated or not K.is_ar(t))) or (t in K.SOFT_FILLERS and isolated):
             out.append({"start": words[i]["start"] - 0.03, "end": words[i]["end"] + 0.03, "text": words[i]["text"], "kind": "word"})
         elif i + 1 < len(toks) and (t, toks[i + 1]) in K.FILLER_PHRASES:
             out.append({"start": words[i]["start"] - 0.03, "end": words[i + 1]["end"] + 0.03, "text": words[i]["text"] + " " + words[i + 1]["text"], "kind": "phrase"})
@@ -262,8 +264,8 @@ def analyze(path, words, lang="en", extra_retakes=None, presenter=True):
         if rs: claims.append({"start": s["start"], "end": s["end"], "text": s["text"], "reason": "; ".join(rs)})
     graphics_needed = []
     for idx, s in enumerate(sents):
-        m = K.match_graphic(s["text"])
-        if m: graphics_needed.append({"sentence": idx, "start": s["start"], "end": s["end"], **m, "text": s["text"]})
+        ms = K.match_graphics(s["text"])
+        if ms: graphics_needed.append({"sentence": idx, "start": s["start"], "end": s["end"], **ms[0], "alts": ms[1:], "text": s["text"]})
     fillers = detect_fillers(words, audio) if presenter else []
     if presenter and any(w.get("approx") for w in words[:5]):
         seen = {(round(f["start"], 1)) for f in fillers}

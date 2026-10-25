@@ -13,7 +13,11 @@ render queue.
 | Write and record here | topic → AI draft (or starter script) → in-browser teleprompter recording | same as above |
 | No filming | topic or script | AI narrator (generic voice, labelled "AI voice" on the end card), full-screen animations, kinetic captions |
 
-After the first edit, the doctor reviews it in the **studio**: toggle cuts, fix the transcript, change layouts, ask for changes in
+Graphics (all original, procedural): CT scanner, cardiac CT calcium scoring with the CAC-DRS scale, beating heart with the
+coronary tree, plaque/narrowing, plaque rupture and clot, balloon + stent, ECG, blood-pressure card, keyword pop-ups, and the
+doctor's own photos (clinic, team…). Hesitations ("ااا", "euh", "um") are cut automatically; a soft music bed sits ~15 dB under the voice.
+
+After the first edit, the doctor reviews it in the **studio**: toggle cuts, fix the transcript, change layouts, add graphics or photos, ask for changes in
 plain language ("make the subtitles more dynamic"), check the flagged claims, then export 1080×1920 MP4 + .srt.
 
 ## Test it on your own computer (Windows / Mac) — easiest

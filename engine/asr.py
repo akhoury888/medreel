@@ -261,6 +261,8 @@ def transcribe(path, language="auto", quality="best", context=None):
     """-> (backend, words, language). quality='best' uses Whisper large-v3 for Arabic (much better on
     Lebanese dialect, ~6x slower on CPU — use a GPU worker in production); 'fast' uses turbo (timing only)."""
     backend = os.environ.get("MEDREEL_ASR", "auto")
+    if cloud_available() and language in (None, "", "auto") and whisper_available():
+        language = detect_language(load_audio(path))  # find English locally first: English never uses (paid) cloud minutes
     if cloud_available() and language != "en":  # English: local Parakeet is already excellent
         try:
             return _transcribe_cloud(path, language, context if isinstance(context, dict) else None)

@@ -46,8 +46,9 @@ def build_plan(source_path, asr_backend, words, analysis, style="modern_educatio
         cuts.append({"id": _id("cut"), "start": r["start"], "end": r["end"], "reason": "retake", "enabled": True, "auto": True,
                      "note": f"False start removed — kept the later take: “{r['kept']}”", "text": r["text"]})
     for f in analysis["fillers"]:
-        cuts.append({"id": _id("cut"), "start": round(f["start"], 3), "end": round(f["end"], 3), "reason": "filler", "enabled": False,
-                     "auto": True, "needs_approval": True, "note": f"Filler “{f['text']}”"})
+        sure = f.get("kind") == "hesitation"  # 'ااا' / 'euh' are never content: cut without asking
+        cuts.append({"id": _id("cut"), "start": round(f["start"], 3), "end": round(f["end"], 3), "reason": "filler", "enabled": sure,
+                     "auto": True, "needs_approval": not sure, "note": f"{'Hesitation' if sure else 'Filler'} “{f['text']}”"})
     cuts.sort(key=lambda c: c["start"])
 
     # graphics scenes — at most one per ~7 s, never overlapping, max ~50% coverage
@@ -56,15 +57,29 @@ def build_plan(source_path, asr_backend, words, analysis, style="modern_educatio
     sents = analysis["sentences"]
     seen = {}  # (asset, mode) -> end time of its last scene
     for g in analysis["graphics_needed"]:
-        if g["start"] < last_end - 0.2: continue
+        gap = 1.2 if presenter else 0.0  # let the face breathe between graphics
+        if g["start"] < last_end + gap:
+            if g["end"] - (last_end + gap) < 2.5: continue
+            g = {**g, "start": last_end + gap}  # long sentence: start its graphic part-way through
+        # variety: take the best candidate not shown in the last 18 s
+        cands = [g] + g.get("alts", [])
+        pick = next((c for c in cands if (c["asset"], c["mode"]) not in seen or g["start"] - seen[(c["asset"], c["mode"])] >= 18.0), None)
+        if pick is None:  # all shown recently: reuse the least recent one if it's been at least a few seconds
+            c = min(cands, key=lambda c: seen.get((c["asset"], c["mode"]), -99))
+            pick = c if g["start"] - seen.get((c["asset"], c["mode"]), -99) >= 5.0 else None
+        if pick is None: continue
+        g = {**g, **{k: pick[k] for k in ("asset", "mode", "priority", "layout", "label")}}
         key = (g["asset"], g["mode"])
-        if key in seen and (g["asset"] == "coronary" or g["start"] - seen[key] < 15.0): continue  # no back-to-back repeats
         end = g["end"] + 0.25
         nxt = g["sentence"] + 1
         while end - g["start"] < 4.5 and nxt < len(sents):  # give animations room to play
             end = sents[nxt]["end"] + 0.25; nxt += 1
+        if presenter and g["start"] < 5.0:  # opening seconds: face, hook title and name card only
+            if g["end"] - 5.0 < 2.5: continue
+            g = {**g, "start": 5.0}
         layout = g["layout"]
         if style in ("minimalist_premium", "clean_professional") and layout == "full_graphic": layout = "pip"
+        if presenter: end = min(end, g["start"] + 8.5)  # keep the doctor on screen: no graphic hogs the frame
         scenes.append({"id": _id("scn"), "start": round(g["start"] - 0.1, 3), "end": round(min(end, dur), 3), "layout": layout,
                        "graphic": {"asset": g["asset"], "mode": g["mode"], "label": g["label"]}, "text": g["text"], "auto": True, "enabled": True})
         seen[key] = end; last_end = end
@@ -96,7 +111,7 @@ def build_plan(source_path, asr_backend, words, analysis, style="modern_educatio
         if any(s["start"] <= w0["start"] <= s["end"] for s in scenes): continue
         emph.append({"id": _id("emp"), "start": w0["start"], "end": words[t["end_idx"]]["end"] + 0.6, "term": t["label"], "enabled": True})
         used.add(t["label"])
-    emph = emph[:4]
+    emph = [e for k, e in enumerate(emph) if k == 0 or e["start"] - emph[k - 1]["start"] >= 5.0][: max(4, int(analysis["meta"]["duration"] / 7))]
 
     return {
         "version": 1, "id": uuid.uuid4().hex[:10], "created": time.time(),

@@ -425,3 +425,6 @@ ASSET_INFO = {
     "bp/gauge": "Blood pressure dial with animated numbers (overlay card)",
     "ct/calcium": "Cardiac CT — coronary calcium appears, then CAC-DRS score categories",
 }
+
+
+from . import graphics_pro  # noqa: E402,F401  (registers ct/scanner, heart, photo; upgrades ct/calcium)

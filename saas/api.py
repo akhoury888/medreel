@@ -184,6 +184,38 @@ def ops(pid):
     return jsonify(res)
 
 
+@bp.post("/api/projects/<pid>/photos")
+@login_required
+def add_photo(pid):
+    """Upload a photo (JPG/PNG/WebP) and place it in the video at a phrase or at the current preview time."""
+    import uuid
+    from PIL import Image, ImageOps
+    from engine import commands
+    p = _own(pid)
+    if _busy(p): abort(409, "Wait until the first edit is finished.")
+    f = request.files.get("photo")
+    if not f: abort(400, "Choose a photo.")
+    data = f.read(15 * 1024 * 1024 + 1)
+    if len(data) > 15 * 1024 * 1024: abort(400, "Photos can be up to 15 MB.")
+    try:
+        import io
+        im = Image.open(io.BytesIO(data)); im.verify()
+        im = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
+    except Exception:
+        abort(400, "That file isn't a photo we can read. Use JPG, PNG or WebP.")
+    im.thumbnail((2000, 2000))
+    os.makedirs(os.path.join(p.dir, "photos"), exist_ok=True)
+    photo_id = uuid.uuid4().hex[:12]
+    im.save(os.path.join(p.dir, "photos", photo_id + ".jpg"), "JPEG", quality=90)  # re-encoded: no EXIF/location data kept
+    op = {"op": "add_photo", "photo": photo_id, "caption": (request.form.get("caption") or "").strip()[:80],
+          "phrase": (request.form.get("phrase") or "").strip()[:200]}
+    try: op["t_out"] = max(0.0, float(request.form.get("t_out") or 0))
+    except ValueError: pass
+    res = commands.execute_ops(_plan_path(p), [op], label="Add photo")
+    jobs.enqueue(p, "preview", priority=_prio())
+    return jsonify(res)
+
+
 @bp.post("/api/projects/<pid>/undo")
 @login_required
 def undo(pid):
