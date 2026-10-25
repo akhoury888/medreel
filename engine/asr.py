@@ -201,10 +201,71 @@ def _transcribe_whisper_sherpa(a, lang, name=None, context=None):
     return f"whisper-{name}", words
 
 
+# ---------- cloud speech recognition (optional; much better on Arabic dialects) ----------
+CLOUD_TERMS = {"ar": ["coroscanner", "calcium score", "stent", "cholesterol", "scanner", "test"],
+               "fr": ["coroscanner", "score calcique", "stent", "cholestérol"], "en": ["calcium score", "stent"]}
+
+
+def cloud_available():
+    return bool(os.environ.get("ELEVENLABS_API_KEY")) and os.environ.get("MEDREEL_ASR", "auto") in ("auto", "cloud")
+
+
+def _multipart(fields, files):
+    import uuid
+    b = uuid.uuid4().hex; out = []
+    for k, v in fields:
+        out += [f"--{b}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n".encode()]
+    for k, (fn, data, ct) in files.items():
+        out += [f"--{b}\r\nContent-Disposition: form-data; name=\"{k}\"; filename=\"{fn}\"\r\nContent-Type: {ct}\r\n\r\n".encode(), data, b"\r\n"]
+    out.append(f"--{b}--\r\n".encode())
+    return b"".join(out), f"multipart/form-data; boundary={b}"
+
+
+def _transcribe_cloud(path, language, context=None):
+    """ElevenLabs Scribe: real word timestamps, strong on Lebanese/Levantine Arabic and code-switching.
+    The doctor's name, clinic and common test names are sent as key terms."""
+    import json, urllib.request, urllib.error
+    from . import knowledge as K
+    mp3 = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-vn", "-ac", "1", "-ar", "16000", "-b:a", "64k", "-f", "mp3", "-"],
+                         capture_output=True, check=True).stdout
+    ctx = context or {}
+    terms = [t for t in [ctx.get("name"), ctx.get("clinic")] if t] + CLOUD_TERMS.get(language, [])
+    base = [("timestamps_granularity", "word"), ("tag_audio_events", "false")]
+    if language in ("en", "fr", "ar"): base.append(("language_code", language))
+    attempts = []
+    for model in [os.environ.get("MEDREEL_CLOUD_ASR_MODEL", "scribe_v2"), "scribe_v1"]:
+        attempts += [(model, [("keyterms", t[:50]) for t in terms[:20]]), (model, [])]
+    err = None
+    for model, extra in attempts:
+        body, ct = _multipart([("model_id", model)] + base + extra, {"file": ("audio.mp3", mp3, "audio/mpeg")})
+        req = urllib.request.Request("https://api.elevenlabs.io/v1/speech-to-text", body,
+                                     {"xi-api-key": os.environ["ELEVENLABS_API_KEY"], "Content-Type": ct})
+        try:
+            r = json.loads(urllib.request.urlopen(req, timeout=300).read())
+            break
+        except urllib.error.HTTPError as e:
+            err = e
+            if e.code in (401, 402, 403, 429): raise RuntimeError(f"cloud ASR refused ({e.code})")
+            continue  # 400/422: try without key terms / older model
+    else:
+        raise RuntimeError(f"cloud ASR failed: {err}")
+    lang = {"ara": "ar", "fra": "fr", "eng": "en"}.get(r.get("language_code", ""), (r.get("language_code") or language or "en")[:2])
+    words = [{"text": w["text"].strip(), "start": round(float(w["start"]), 3), "end": round(float(w["end"]), 3),
+              "conf": round(min(1.0, float(np.exp(w["logprob"]))) if w.get("logprob") is not None else 1.0, 3)}
+             for w in r.get("words", []) if w.get("type", "word") == "word" and w.get("text", "").strip()]
+    if lang == "ar": words = K.correct_medical_terms(words)
+    return f"elevenlabs-{model}", words, lang
+
+
 def transcribe(path, language="auto", quality="best", context=None):
     """-> (backend, words, language). quality='best' uses Whisper large-v3 for Arabic (much better on
     Lebanese dialect, ~6x slower on CPU — use a GPU worker in production); 'fast' uses turbo (timing only)."""
     backend = os.environ.get("MEDREEL_ASR", "auto")
+    if cloud_available() and language != "en":  # English: local Parakeet is already excellent
+        try:
+            return _transcribe_cloud(path, language, context if isinstance(context, dict) else None)
+        except Exception as e:
+            import logging; logging.getLogger("medreel.asr").warning("cloud ASR unavailable, using local models: %s", e)
     a = load_audio(path)
     if language in (None, "", "auto"):
         language = detect_language(a) if whisper_available() else "en"

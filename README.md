@@ -52,6 +52,9 @@ Add a GPU worker later for speed (see Scaling).
 ### Optional services
 - `ANTHROPIC_API_KEY` — AI script drafts, automatic clean-up of Arabic transcripts, subtitle translation (EN/FR/AR).
   Without it, starter scripts and manual editing still work.
+- `ELEVENLABS_API_KEY` — cloud transcription (ElevenLabs Scribe) for Arabic and French: far more accurate on Lebanese dialect
+  than the offline models, and takes seconds. Falls back to the offline models if the key is missing or the service fails.
+  The doctor's audio is sent to ElevenLabs — mention it in your privacy policy.
 - `SMTP_*` — password-reset emails.
 
 ## Architecture
