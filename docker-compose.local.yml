@@ -21,6 +21,8 @@ services:
       ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
       # Optional, free stock footage (pexels.com/api): PEXELS_API_KEY=... in the same .env file
       PEXELS_API_KEY: ${PEXELS_API_KEY:-}
+      # ...or Pixabay (pixabay.com/api/docs): PIXABAY_API_KEY=... in the same .env file
+      PIXABAY_API_KEY: ${PIXABAY_API_KEY:-}
     # one web process with one built-in render worker (keeps memory use reasonable on a laptop)
     command: sh -c "gunicorn -w 1 -k gthread --threads 8 --timeout 600 -b 0.0.0.0:8080 wsgi:app"
     volumes: [ "medreel-local-data:/data" ]

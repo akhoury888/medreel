@@ -1,49 +1,87 @@
-"""Stock B-roll from Pexels (free for commercial use, no attribution required in the video).
+"""Stock B-roll from Pexels or Pixabay (both free for commercial use, no attribution required in the video).
 
-Needs PEXELS_API_KEY (free at pexels.com/api). Clips are downloaded once per project, trimmed to
-<= 8 s, cropped to 1080x1920 at 30 fps without audio (the doctor's voice continues over them),
-stored as <project>/broll/<clip>.mp4 + .jpg poster, and used as a 'broll/<clip>' scene."""
+Needs PEXELS_API_KEY (pexels.com/api) or PIXABAY_API_KEY (pixabay.com/api/docs). Clips are downloaded once per
+project (never hot-linked), trimmed to <= 8 s, cropped to 1080x1920 at 30 fps without audio (the doctor's voice
+continues over them), stored as <project>/broll/<clip>.mp4 + .jpg poster, and used as a 'broll/<clip>' scene.
+Clip ids carry the source: 'px<id>' = Pexels, 'pb<id>' = Pixabay."""
 import json, logging, os, re, subprocess, urllib.parse, urllib.request
 from . import concepts as CO
 
 log = logging.getLogger("medreel.broll")
 API = "https://api.pexels.com/videos"
+PIXABAY = "https://pixabay.com/api/videos/"
+CLIP_RE = re.compile(r"p[xb]\d{1,12}")
+
+
+def provider():
+    return "pexels" if os.environ.get("PEXELS_API_KEY") else "pixabay" if os.environ.get("PIXABAY_API_KEY") else None
 
 
 def available():
-    return bool(os.environ.get("PEXELS_API_KEY"))
+    return provider() is not None
+
+
+def credit():
+    return {"pexels": ("Pexels", "https://www.pexels.com"), "pixabay": ("Pixabay", "https://pixabay.com")}.get(provider())
 
 
 def _get(url, timeout=20):
-    req = urllib.request.Request(url, headers={"Authorization": os.environ["PEXELS_API_KEY"], "User-Agent": "MedReel/1.0"})
-    return json.loads(urllib.request.urlopen(req, timeout=timeout).read())
+    hdr = {"User-Agent": "MedReel/1.0"}
+    if "pexels.com" in url: hdr["Authorization"] = os.environ["PEXELS_API_KEY"]
+    return json.loads(urllib.request.urlopen(urllib.request.Request(url, headers=hdr), timeout=timeout).read())
 
 
-def _brief(v):
-    return {"id": v["id"], "image": v.get("image"), "duration": v.get("duration"), "user": (v.get("user") or {}).get("name"),
-            "url": v.get("url"), "width": v.get("width"), "height": v.get("height")}
+def _brief(v):  # Pexels video -> common shape
+    return {"id": f"px{v['id']}", "image": v.get("image"), "duration": v.get("duration"), "user": (v.get("user") or {}).get("name"),
+            "url": v.get("url"), "_files": [{"link": f.get("link"), "width": f.get("width"), "height": f.get("height")}
+                                             for f in v.get("video_files", []) if (f.get("file_type") or "").endswith("mp4")]}
+
+
+def _brief_pb(h):  # Pixabay hit -> common shape
+    vs = h.get("videos") or {}
+    thumb = next((vs[k].get("thumbnail") for k in ("small", "medium", "tiny", "large") if (vs.get(k) or {}).get("thumbnail")), None)
+    return {"id": f"pb{h['id']}", "image": thumb, "duration": h.get("duration"), "user": h.get("user"), "url": h.get("pageURL"),
+            "_files": [{"link": f.get("url"), "width": f.get("width"), "height": f.get("height")} for f in vs.values() if f and f.get("url")]}
+
+
+def _pb_url(**params):
+    return PIXABAY + "?" + urllib.parse.urlencode({"key": os.environ["PIXABAY_API_KEY"], "safesearch": "true", **params})
 
 
 def search(query, per_page=8, orientation="portrait"):
+    if provider() == "pixabay":
+        hits = _get(_pb_url(q=query[:100], per_page=max(3, per_page), video_type="film")).get("hits", [])
+        out = [_brief_pb(h) for h in hits if 3 <= (h.get("duration") or 0) <= 60]
+        # portrait/square clips first (less cropping on a 9:16 screen)
+        return sorted(out, key=lambda r: -max((f["height"] or 0) / max(1, f["width"] or 1) for f in r["_files"]) if r["_files"] else 0)
     q = urllib.parse.urlencode({"query": query[:80], "per_page": per_page, "orientation": orientation, "size": "medium"})
     vids = _get(f"{API}/search?{q}").get("videos", [])
-    vids = [v for v in vids if 3 <= (v.get("duration") or 0) <= 60]
-    return [_brief(v) | {"_files": v.get("video_files", [])} for v in vids]
+    return [_brief(v) for v in vids if 3 <= (v.get("duration") or 0) <= 60]
+
+
+def _lookup(clip_id):
+    if clip_id.startswith("pb"):
+        hits = _get(_pb_url(id=int(clip_id[2:]))).get("hits", [])
+        return _brief_pb(hits[0]) if hits else None
+    return _brief(_get(f"{API}/videos/{int(clip_id[2:])}"))
 
 
 def _pick_file(files):
-    """Smallest file that is still >= 1280 px tall (portrait) or wide; else the largest."""
-    mp4 = [f for f in files if (f.get("file_type") or "").endswith("mp4") and f.get("link")]
+    """Smallest file that is still >= 1280 px on its long side; else the largest."""
+    mp4 = [f for f in files if f.get("link")]
     good = [f for f in mp4 if max(f.get("width") or 0, f.get("height") or 0) >= 1280]
     if good: return min(good, key=lambda f: (f.get("width") or 0) * (f.get("height") or 0))
     return max(mp4, key=lambda f: (f.get("width") or 0) * (f.get("height") or 0)) if mp4 else None
 
 
 def fetch(video, project_dir, max_s=8.0):
-    """video: a search result (with _files) or a Pexels video id. -> clip id ('px<id>') or None."""
+    """video: a search result or a clip id ('px123' / 'pb123'). -> clip id or None."""
     if not isinstance(video, dict):
-        v = _get(f"{API}/videos/{int(video)}"); video = _brief(v) | {"_files": v.get("video_files", [])}
-    clip = f"px{int(video['id'])}"
+        if not CLIP_RE.fullmatch(str(video)): return None
+        video = _lookup(str(video))
+        if not video: return None
+    clip = video["id"]
+    if not CLIP_RE.fullmatch(clip): return None
     d = os.path.join(project_dir, "broll"); os.makedirs(d, exist_ok=True)
     out = os.path.join(d, clip + ".mp4")
     if os.path.exists(out): return clip
@@ -64,7 +102,7 @@ def fetch(video, project_dir, max_s=8.0):
     os.remove(raw)
     if r.returncode or not os.path.exists(out): return None
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", "1", "-i", out, "-frames:v", "1", "-vf", "scale=240:-2", os.path.join(d, clip + ".jpg")])
-    json.dump({"pexels_id": video["id"], "url": video.get("url"), "user": video.get("user")}, open(os.path.join(d, clip + ".json"), "w"))
+    json.dump({"source": "pixabay" if clip.startswith("pb") else "pexels", "url": video.get("url"), "user": video.get("user")}, open(os.path.join(d, clip + ".json"), "w"))
     return clip
 
 

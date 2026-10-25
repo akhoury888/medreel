@@ -225,7 +225,7 @@ def apply(plan, op):
         return f"Removed the sentence “{s['text']}”."
     if o == "add_broll":  # a stock clip downloaded by the API into broll/<clip>.mp4
         clip = str(op.get("clip", ""))
-        if not re.fullmatch(r"px\d{1,12}", clip): return "Unknown clip."
+        if not re.fullmatch(r"p[xb]\d{1,12}", clip): return "Unknown clip."
         op = {**op, "op": "add_photo", "photo": "", "_asset": f"broll/{clip}", "layout": op.get("layout") or ("pip" if plan.get("presenter", True) else "full_graphic")}
         o = "add_photo"
     if o == "add_photo":  # a photo the doctor uploaded (saved as photos/<id>.jpg by the API)

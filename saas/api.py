@@ -40,6 +40,12 @@ def _probe(path):
     return {"video": "video" in types, "audio": "audio" in types, "duration": dur}
 
 
+def _stock_credit():
+    from engine import broll
+    c = broll.credit()
+    return {"name": c[0], "url": c[1]} if c else None
+
+
 @bp.get("/api/meta")
 @login_required
 def meta():
@@ -48,7 +54,7 @@ def meta():
                     "captions": planner.CAPTION_STYLES, "music": planner.MUSIC_TRACKS, "assets": graphics.ASSET_INFO,
                     "brand_defaults": planner.DEFAULT_BRAND, "modes": pipeline.MODES,
                     "voices": {l: synth.available(l) for l in ("en", "fr", "ar")},
-                    "ai_scripts": bool(os.environ.get("ANTHROPIC_API_KEY")), "stock": bool(os.environ.get("PEXELS_API_KEY")),
+                    "ai_scripts": bool(os.environ.get("ANTHROPIC_API_KEY")), "stock": _stock_credit(),
                     "projects": [p.id for p in Session.scalars(select(Project).where(Project.user_id == current_user().id).order_by(Project.created_at.desc()).limit(20))]})
 
 
@@ -231,7 +237,7 @@ def list_photos(pid):
 @login_required
 def stock_search():
     from engine import broll
-    if not broll.available(): return jsonify({"error": "Stock videos need a free Pexels key (PEXELS_API_KEY).", "results": []}), 503
+    if not broll.available(): return jsonify({"error": "Stock videos need a free Pixabay or Pexels key.", "results": []}), 503
     q = (request.args.get("q") or "").strip()[:80]
     if not q: return jsonify({"results": []})
     try: res = broll.search(q, per_page=12)
@@ -246,8 +252,8 @@ def add_stock(pid):
     p = _own(pid)
     if _busy(p): abort(409, "Wait until the first edit is finished.")
     b = request.get_json(force=True, silent=True) or {}
-    try: vid = int(b.get("video_id"))
-    except (TypeError, ValueError): abort(400, "Choose a video.")
+    vid = str(b.get("video_id") or "")
+    if not broll.CLIP_RE.fullmatch(vid): abort(400, "Choose a video.")
     try: clip = broll.fetch(vid, p.dir)
     except Exception: clip = None
     if not clip: abort(502, "Couldn't download that video. Try another one.")
@@ -299,7 +305,7 @@ def media(pid, name):
     if name.startswith("source.") and "/" not in name: return send_from_directory(p.dir, name, conditional=True)
     m = re.fullmatch(r"photo_([0-9a-f]{12})\.jpg", name)
     if m: return send_from_directory(os.path.join(p.dir, "photos"), m.group(1) + ".jpg", conditional=True)
-    m = re.fullmatch(r"broll_(px\d{1,12})\.jpg", name)
+    m = re.fullmatch(r"broll_(p[xb]\d{1,12})\.jpg", name)
     if m: return send_from_directory(os.path.join(p.dir, "broll"), m.group(1) + ".jpg", conditional=True)
     if name not in allowed: abort(404)
     dl = request.args.get("dl") == "1"

@@ -221,10 +221,10 @@ async function renderPhotos(){
       <div class="grow"><div dir="auto" style="${ar?'font-size:16px;font-family:Tajawal,Inter,sans-serif':''}">${esc(x.text)}</div>${hasTr&&TR[i]?`<div class="mini" dir="auto">${esc(TR[i])}</div>`:''}
         ${here.map(s=>`<div class="pin"><img src="${thumb(s)}" alt=""><span class="mini grow">${esc(s.graphic.asset==='broll'?'Stock video':(s.caption||'Photo'))} · ${s.layout}</span><button class="btn sm" onclick="ops([{op:'delete_scene',id:'${s.id}'}],true)">Remove</button></div>`).join('')}</div>
       <button class="btn sm ${any?'pri':''}" ${any?'':'disabled'} onclick="placePhoto(${i})">${SELV?'Add video here':'Add photo here'}</button></div>`}).join('');
-  const stock=META.stock?`<h3>Stock videos <span class="mini">— free footage, <a href="https://www.pexels.com" target="_blank" rel="noopener">videos provided by Pexels</a></span></h3>
+  const stock=META.stock?`<h3>Stock videos <span class="mini">— free footage, <a href="${esc(META.stock.url)}" target="_blank" rel="noopener">videos provided by ${esc(META.stock.name)}</a></span></h3>
    <div style="display:flex;gap:8px"><input id="stQ" value="${esc(STOCKQ)}" placeholder="search in English, e.g. inhaler, lungs, jogging" style="flex:1;padding:8px;border:1px solid var(--line);border-radius:9px"><button class="btn sm" id="stGo">Search</button></div>
    <div class="phlib">${STOCK.map(v=>`<button class="ph ${v.id===SELV?'on':''}" data-st="${v.id}" title="${esc((v.user||'')+' · '+(v.duration||'')+'s')}"><img src="${esc(v.image||'')}" alt="" referrerpolicy="no-referrer"></button>`).join('')}</div>`
-   :`<p class="mini">Want real footage too? Add a free Pexels key (PEXELS_API_KEY) to unlock stock videos.</p>`;
+   :`<p class="mini">Want real footage too? Add a free Pixabay key (PIXABAY_API_KEY) to unlock stock videos.</p>`;
   $('#tab-photos').innerHTML=`<p class="mini" style="margin-top:0">1. Upload your photos (clinic, team, equipment, a scan you're allowed to share). 2. Click a photo to select it. 3. Press <b>Add photo here</b> next to the sentence where it should appear. Never use a photo that shows a patient without written consent.</p>
    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input type="file" id="phF" accept="image/jpeg,image/png,image/webp" multiple><button class="btn sm pri" id="phUp">Upload</button>
    <input id="phC" placeholder="caption for the next photo you add (optional)" maxlength="80" style="flex:1;min-width:180px;padding:8px;border:1px solid var(--line);border-radius:9px"></div>
@@ -233,7 +233,7 @@ async function renderPhotos(){
    <div style="display:flex;align-items:center;gap:8px;margin:14px 0 4px"><h3 style="margin:0" class="grow">Your script</h3>${!hasTr&&P.language!=='en'?`<button class="btn sm" id="trBtn">Show English translation</button>`:''}</div>
    ${rows}`;
   $$('[data-ph]').forEach(b=>b.onclick=()=>{SEL=b.dataset.ph===SEL?null:b.dataset.ph;SELV=null;renderPhotos()});
-  $$('[data-st]').forEach(b=>b.onclick=()=>{const v=+b.dataset.st;SELV=v===SELV?null:v;SEL=null;renderPhotos()});
+  $$('[data-st]').forEach(b=>b.onclick=()=>{const v=b.dataset.st;SELV=v===SELV?null:v;SEL=null;renderPhotos()});
   if($('#stGo')){$('#stGo').onclick=searchStock;$('#stQ').onkeydown=e=>{if(e.key==='Enter')searchStock()}}
   $('#phUp').onclick=uploadPhotos;
   if($('#trBtn'))$('#trBtn').onclick=()=>ops([{op:'translate_captions',target:'en'}],false);
