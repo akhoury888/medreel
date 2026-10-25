@@ -38,16 +38,30 @@ def fill_plan_translations(plan, target):
     return len(tr)
 
 
-def clean_transcript(phrases, lang="ar"):
-    """Fix obvious ASR errors in Lebanese-dialect phrases (medical terms, split words) without rewording.
-    Same number of phrases back; dialect kept as spoken."""
+def clean_transcript(phrases, lang="ar", alts=None, context=None):
+    """Fix speech-recognition errors in dialect phrases without rewording. `alts` = the same phrases
+    from a second recognizer (each model makes different mistakes); `context` = speaker name,
+    specialty, clinic and video title so names and places come out right. Same number of phrases back."""
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key: raise TranslationUnavailable("no key")
-    prompt = ("These are speech-recognition phrases from a Lebanese cardiologist speaking Lebanese Arabic "
-              "(may include French/English medical words). Correct only clear recognition errors (misheard medical terms, "
-              "words wrongly split or merged, dropped letters). Keep the Lebanese dialect wording exactly as spoken — do not "
-              "convert to Modern Standard Arabic, do not add or remove content, do not punctuate heavily. Return ONLY a JSON array "
-              "of strings, same length and order.\n\n" + json.dumps(phrases, ensure_ascii=False))
+    ctx = context or {}
+    about = "; ".join(f"{k}: {v}" for k, v in (("speaker", ctx.get("name")), ("specialty", ctx.get("specialty")),
+                                                  ("clinic / hospital", ctx.get("clinic")), ("video title", ctx.get("title"))) if v)
+    if alts and len(alts) == len(phrases):
+        items = [{"a": x, "b": y} for x, y in zip(phrases, alts)]
+        shape = ("Each item has two recognitions of the same spoken phrase: 'a' (more accurate model) and 'b' (another model). "
+                 "Where they disagree, choose or combine what was most plausibly said.")
+    else:
+        items, shape = phrases, "Each item is one recognized spoken phrase."
+    dialect = {"ar": "Lebanese Arabic (with French/English medical words)", "fr": "French", "en": "English"}.get(lang, lang)
+    prompt = (f"These are speech-recognition phrases from a physician speaking {dialect} in a short educational social-media video"
+              + (f" ({about})" if about else "") + ". " + shape +
+              " Correct recognition errors only: misheard medical terms and test names (e.g. coroscanner, calcium score, stent, "
+              "cholesterol), the speaker's name, hospital and place names, words wrongly split or merged, dropped letters. "
+              "Write foreign medical words the way the speaker said them (Latin script is fine for English/French terms). "
+              "Keep the dialect exactly as spoken — never convert to Modern Standard Arabic, never add, remove or summarise content, "
+              "no heavy punctuation. Return ONLY a JSON array of strings: one corrected phrase per item, same length and order.\n\n"
+              + json.dumps(items, ensure_ascii=False))
     body = json.dumps({"model": os.environ.get("MEDREEL_LLM", "claude-sonnet-5-5"), "max_tokens": 4000,
                        "messages": [{"role": "user", "content": prompt}]}).encode()
     req = urllib.request.Request("https://api.anthropic.com/v1/messages", body,

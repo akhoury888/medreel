@@ -3,7 +3,10 @@
 # Test mode: choosing a plan activates it instantly without charging; password-reset links show on screen.
 services:
   medreel:
-    build: .
+    build:
+      context: .
+      args:
+        WITH_LARGE: "1"   # include the large speech model: much better Arabic (slower)
     image: medreel-local
     ports: [ "8080:8080" ]
     environment:
@@ -11,8 +14,9 @@ services:
       PUBLIC_URL: http://localhost:8080
       DATABASE_URL: sqlite:////data/medreel.db
       WORKER_INLINE: "1"
-      # Optional: paste a key from console.anthropic.com to try AI script drafts and translation
-      ANTHROPIC_API_KEY: ""
+      # Optional: AI clean-up of Arabic transcripts, AI script drafts, translation.
+      # Create a file named .env next to this file containing:  ANTHROPIC_API_KEY=sk-ant-...
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     # one web process with one built-in render worker (keeps memory use reasonable on a laptop)
     command: sh -c "gunicorn -w 1 -k gthread --threads 8 --timeout 600 -b 0.0.0.0:8080 wsgi:app"
     volumes: [ "medreel-local-data:/data" ]

@@ -146,7 +146,7 @@ def detect_language(a):
     return (getattr(r, "lang", "") or "en").strip("<|>") or "en"
 
 
-def _transcribe_whisper_sherpa(a, lang, name=None):
+def _transcribe_whisper_sherpa(a, lang, name=None, context=None):
     """Whisper gives text per chunk but (in this export) no word times, so words are aligned to the
     energy-VAD speech regions by character mass: pauses between regions are exact, word times inside
     a region are approximate (+-0.2 s) — good for captions and cut decisions."""
@@ -163,10 +163,16 @@ def _transcribe_whisper_sherpa(a, lang, name=None):
     for ch in chunks:
         s0, s1 = max(0, ch[0][0] - 0.15), min(dur, ch[-1][1] + 0.15)
         texts.append(_decode(rec, a[int(s0 * SR): int(s1 * SR)]).text.strip())
-    if os.environ.get("ANTHROPIC_API_KEY") and lang in ("ar",):
+    if os.environ.get("ANTHROPIC_API_KEY") and lang in ("ar",) and context is not False:
+        alts = None
+        other = next((n for n in WHISPER_DIRS if n != name and os.path.isdir(os.path.join(MODELS, WHISPER_DIRS[n]))), None)
+        if other and name == "large-v3":  # a second opinion: the two models mishear different words
+            rec2, _ = _whisper_rec(lang, other)
+            alts = [_decode(rec2, a[int(max(0, ch[0][0] - 0.15) * SR): int(min(dur, ch[-1][1] + 0.15) * SR)]).text.strip() for ch in chunks]
         try:
             from .translate import clean_transcript
-            texts = clean_transcript(texts, lang)
+            texts = clean_transcript(texts, lang, alts=alts, context=context)
+            name = name + "+ai"
         except Exception:
             pass  # cleanup is best-effort; raw ASR text is still usable and editable
     words, rid = [], 0
@@ -195,7 +201,7 @@ def _transcribe_whisper_sherpa(a, lang, name=None):
     return f"whisper-{name}", words
 
 
-def transcribe(path, language="auto", quality="best"):
+def transcribe(path, language="auto", quality="best", context=None):
     """-> (backend, words, language). quality='best' uses Whisper large-v3 for Arabic (much better on
     Lebanese dialect, ~6x slower on CPU — use a GPU worker in production); 'fast' uses turbo (timing only)."""
     backend = os.environ.get("MEDREEL_ASR", "auto")
@@ -206,6 +212,6 @@ def transcribe(path, language="auto", quality="best"):
         return "parakeet-tdt-0.6b-v2", _transcribe_parakeet(a), "en"
     if backend in ("auto", "whisper") and whisper_available():
         name = "large-v3" if (quality == "best" and language == "ar" and os.environ.get("MEDREEL_WHISPER_AR", "large-v3") == "large-v3") else None
-        b, w = _transcribe_whisper_sherpa(a, language, name)
+        b, w = _transcribe_whisper_sherpa(a, language, name, context if quality == "best" else False)
         return b, w, language
     return "faster-whisper", _transcribe_whisper(path, language), language

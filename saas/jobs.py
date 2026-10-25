@@ -78,7 +78,7 @@ def run_job(j):
         if j.kind == "generate":
             src = payload.get("src")
             pipeline.create(p.dir, p.mode, src, p.script, p.style, _brand_for(u, plan_cfg), p.language, log=lambda m: None,
-                            progress=lambda x, m: prog(x * 0.5, m))
+                            progress=lambda x, m: prog(x * 0.5, m), title=None if p.title == "Untitled video" else p.title)
             plan_path = os.path.join(p.dir, "plan.json")
             plan = json.load(open(plan_path))
             if p.title in ("", "Untitled video") and plan["title"].get("text"): p.title = plan["title"]["text"][:300]

@@ -23,12 +23,13 @@ def ingest(root, src_path, pid=None):
     return pid, d, dst
 
 
-def analyze_and_plan(d, src, style="modern_educational", branding=None, log=print, progress=None, language="auto"):
+def analyze_and_plan(d, src, style="modern_educational", branding=None, log=print, progress=None, language="auto", title=None):
     def p(x, msg):
         log(msg)
         if progress: progress(x, msg)
-    p(0.05, "Transcribing speech…")
-    backend, words, lang = asr.transcribe(src, language)
+    p(0.05, "Transcribing speech… (Arabic takes a few minutes on a laptop)" if language == "ar" else "Transcribing speech…")
+    ctx = {k: (branding or {}).get(k) for k in ("name", "specialty", "clinic")}; ctx["title"] = title
+    backend, words, lang = asr.transcribe(src, language, context=ctx)
     json.dump({"backend": backend, "language": lang, "words": words}, open(os.path.join(d, "transcript.json"), "w"))
     p(0.45, f"Transcribed {len(words)} words ({backend}, {lang}). Analysing pauses, retakes, medical content, framing and audio…")
     an = A.analyze(src, words, lang)
@@ -47,14 +48,14 @@ MODES = {"auto_edit": "Upload a recording — AI edits everything",
          "ai_voice": "Prompt or script → video with AI narration (no recording)"}
 
 
-def create(d, mode, src=None, script=None, style="modern_educational", branding=None, language="auto", log=print, progress=None):
+def create(d, mode, src=None, script=None, style="modern_educational", branding=None, language="auto", log=print, progress=None, title=None):
     """Single entry point for all creation modes. Returns the plan (also saved to plan.json)."""
     from . import script_align, synth
     def p(x, msg):
         log(msg)
         if progress: progress(x, msg)
     if mode == "auto_edit" or (mode in ("own_script", "teleprompter") and not (script or "").strip()):
-        return analyze_and_plan(d, src, style, branding, log, progress, language)
+        return analyze_and_plan(d, src, style, branding, log, progress, language, title)
     lang = language if language in ("en", "fr", "ar") else script_align.detect_script_language(script)
     if mode == "ai_voice":
         if not synth.available(lang): raise RuntimeError(f"No AI voice installed for '{lang}'. Run tools/setup_models.sh.")
