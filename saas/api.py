@@ -1,5 +1,5 @@
 """Project API (every route is scoped to the signed-in user)."""
-import json, os, shutil, subprocess
+import json, os, re, shutil, subprocess
 from flask import Blueprint, request, jsonify, abort, send_from_directory
 from sqlalchemy import select
 from . import config as C, jobs
@@ -207,13 +207,24 @@ def add_photo(pid):
     os.makedirs(os.path.join(p.dir, "photos"), exist_ok=True)
     photo_id = uuid.uuid4().hex[:12]
     im.save(os.path.join(p.dir, "photos", photo_id + ".jpg"), "JPEG", quality=90)  # re-encoded: no EXIF/location data kept
+    if request.form.get("place") == "0":  # just add it to this video's photo library
+        return jsonify({"ok": True, "photo": photo_id, "message": "Photo uploaded — now choose where it goes."})
     op = {"op": "add_photo", "photo": photo_id, "caption": (request.form.get("caption") or "").strip()[:80],
           "phrase": (request.form.get("phrase") or "").strip()[:200]}
+    if (request.form.get("sentence") or "").isdigit(): op["sentence"] = int(request.form["sentence"])
     try: op["t_out"] = max(0.0, float(request.form.get("t_out") or 0))
     except ValueError: pass
     res = commands.execute_ops(_plan_path(p), [op], label="Add photo")
     jobs.enqueue(p, "preview", priority=_prio())
-    return jsonify(res)
+    return jsonify({**res, "photo": photo_id})
+
+
+@bp.get("/api/projects/<pid>/photos")
+@login_required
+def list_photos(pid):
+    p = _own(pid); d = os.path.join(p.dir, "photos")
+    ids = sorted((f[:-4] for f in os.listdir(d) if f.endswith(".jpg")), key=lambda i: os.path.getmtime(os.path.join(d, i + ".jpg"))) if os.path.isdir(d) else []
+    return jsonify({"photos": ids})
 
 
 @bp.post("/api/projects/<pid>/undo")
@@ -252,6 +263,8 @@ def media(pid, name):
     allowed = {"preview.mp4": "renders", "final.mp4": "renders", "plan.json": ".", "thumb.jpg": "."}
     allowed.update({f"{k}{x}.srt": "renders" for k in ("preview", "final") for x in ("", ".en", ".fr", ".ar")})
     if name.startswith("source.") and "/" not in name: return send_from_directory(p.dir, name, conditional=True)
+    m = re.fullmatch(r"photo_([0-9a-f]{12})\.jpg", name)
+    if m: return send_from_directory(os.path.join(p.dir, "photos"), m.group(1) + ".jpg", conditional=True)
     if name not in allowed: abort(404)
     dl = request.args.get("dl") == "1"
     nice = f"{(p.title or 'video')[:60]}{os.path.splitext(name)[1]}" if dl else None

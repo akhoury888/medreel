@@ -58,6 +58,10 @@ details summary{cursor:pointer;font-weight:600;margin:6px 0}
 .hide{display:none!important}
 .mini{font-size:12px;color:var(--mut)}
 @media(max-width:900px){.studio{grid-template-columns:1fr}.styles{grid-template-columns:1fr 1fr}.stats{grid-template-columns:1fr 1fr}.phone{position:static;max-width:360px;margin:auto}}
+.phlib{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.ph{padding:0;border:3px solid transparent;border-radius:10px;background:none;cursor:pointer;width:84px;height:84px;overflow:hidden}
+.ph img{width:100%;height:100%;object-fit:cover;display:block;border-radius:7px}.ph.on{border-color:var(--acc)}
+.pin{display:flex;gap:8px;align-items:center;margin-top:6px;padding:6px;border:1px solid var(--line);border-radius:9px}.pin img{width:46px;height:46px;object-fit:cover;border-radius:6px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
 </style>
 </head>
 <body>
@@ -77,8 +81,8 @@ details summary{cursor:pointer;font-weight:600;margin:6px 0}
     <div>
       <div class="stats" id="stats"></div>
       <div class="card">
-        <div class="tabs" id="tabs"><button data-t="edits" class="on">AI edits</button><button data-t="gfx">Medical graphics</button><button data-t="tx">Transcript</button><button data-t="review">Review</button><button data-t="brand">Style & brand</button></div>
-        <div id="tab-edits"></div><div id="tab-gfx" class="hide"></div><div id="tab-tx" class="hide"></div><div id="tab-review" class="hide"></div><div id="tab-brand" class="hide"></div>
+        <div class="tabs" id="tabs"><button data-t="edits" class="on">AI edits</button><button data-t="gfx">Medical graphics</button><button data-t="photos">Photos</button><button data-t="tx">Transcript</button><button data-t="review">Review</button><button data-t="brand">Style & brand</button></div>
+        <div id="tab-edits"></div><div id="tab-gfx" class="hide"></div><div id="tab-photos" class="hide"></div><div id="tab-tx" class="hide"></div><div id="tab-review" class="hide"></div><div id="tab-brand" class="hide"></div>
       </div>
       <div class="card" style="margin-top:14px">
         <h2>Ask for a change</h2>
@@ -133,7 +137,7 @@ function setVideo(v,r){view=v;$$('.seg button').forEach(b=>b.classList.toggle('o
   const src=v==='source'?`/media/${PID}/source${P.source.path.slice(P.source.path.lastIndexOf('.'))}`:`/media/${PID}/${v}.mp4`;
   $('#vid').src=src+'?t='+Date.now();}
 $$('.seg button').forEach(b=>b.onclick=()=>setVideo(b.dataset.v));
-$$('#tabs button').forEach(b=>b.onclick=()=>{$$('#tabs button').forEach(x=>x.classList.toggle('on',x===b));['edits','gfx','tx','review','brand'].forEach(t=>$('#tab-'+t).classList.toggle('hide',t!==b.dataset.t))});
+$$('#tabs button').forEach(b=>b.onclick=()=>{$$('#tabs button').forEach(x=>x.classList.toggle('on',x===b));['edits','gfx','photos','tx','review','brand'].forEach(t=>$('#tab-'+t).classList.toggle('hide',t!==b.dataset.t))});
 const seek=t=>{if(t==null)return;const v=$('#vid');v.currentTime=t;v.play()};
 
 function renderAll(r){
@@ -152,9 +156,9 @@ function renderAll(r){
     <select onchange="ops([{op:'scene_update',id:'${s.id}',layout:this.value}],true)">${L.replace(`<option>${s.layout}</option>`,`<option selected>${s.layout}</option>`)}</select>
     <label class="sw"><input type="checkbox" ${s.enabled!==false?'checked':''} onchange="ops([{op:'scene_update',id:'${s.id}',enabled:this.checked}],true)"><span></span></label></div>`}).join('')+
    `<h3>Add a graphic</h3><div style="display:flex;gap:8px;flex-wrap:wrap"><select id="gA" style="max-width:100%">${Object.entries(META.assets).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select><input id="gP" placeholder="when I say… (or leave empty: at the current video time)" style="flex:1;min-width:200px;padding:8px;border:1px solid var(--line);border-radius:9px"><button class="btn sm pri" onclick="addGraphic()">Add</button></div>
-   <h3>Add a photo</h3><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input type="file" id="phF" accept="image/jpeg,image/png,image/webp"><input id="phC" placeholder="caption (optional)" maxlength="80" style="flex:1;min-width:140px;padding:8px;border:1px solid var(--line);border-radius:9px"><input id="phP" placeholder="when I say… (or current time)" style="flex:1;min-width:160px;padding:8px;border:1px solid var(--line);border-radius:9px"><button class="btn sm pri" onclick="addPhoto()">Add photo</button></div>
-   <p class="mini">Your clinic, your team, a scan you're allowed to share — never a photo that shows a patient without written consent.</p>
+   <p class="mini">To add your own pictures, open the <b>Photos</b> tab.</p>
    <p class="mini">Layouts: full · side (card beside you) · pip (you in a bubble over the animation) · full_graphic (animation only, your voice continues) · split · labels (floating card).</p>`;
+  renderPhotos();
   // transcript
   const keep=keeps(), kw=new Set();(P.analysis.terms||[]).forEach(t=>{for(let i=t.start_idx;i<=t.end_idx;i++)kw.add(i)});
   const ar=P.language==='ar', cm=P.captions.mode||'original', TR=P.captions.translations||{};
@@ -199,13 +203,40 @@ function renderAll(r){
 function keeps(){const d=P.source.duration,c=P.cuts.filter(c=>c.enabled).map(c=>[Math.max(0,c.start),Math.min(d,c.end)]).sort((a,b)=>a[0]-b[0]);const m=[];
   for(const [a,b] of c){if(b<=a)continue;if(m.length&&a<=m[m.length-1][1]+.05)m[m.length-1][1]=Math.max(m[m.length-1][1],b);else m.push([a,b])}
   const k=[];let t=0;for(const [a,b] of m){if(a-t>.12)k.push([t,a]);t=b}if(d-t>.12)k.push([t,d]);return k}
+let PHOTOS=[], SEL=null;
+function toOut(t){let o=0;for(const [a,b] of keeps()){if(t<a)return o;if(t<=b)return o+(t-a);o+=b-a}return o}
+async function loadPhotos(){try{PHOTOS=(await api(`/api/projects/${PID}/photos`)).photos||[]}catch(e){PHOTOS=[]}}
+async function renderPhotos(){
+  await loadPhotos();
+  if(SEL&&!PHOTOS.includes(SEL))SEL=null;
+  const TR=P.captions.translations||{}, hasTr=Object.values(TR).some(v=>(v||'').trim()), ar=P.language==='ar';
+  const ps=P.scenes.filter(s=>s.graphic.asset==='photo');
+  const lib=PHOTOS.map(id=>`<button class="ph ${id===SEL?'on':''}" data-ph="${id}" title="Select this photo"><img src="/media/${PID}/photo_${id}.jpg" alt=""></button>`).join('');
+  const rows=P.analysis.sentences.map((x,i)=>{
+    const here=ps.filter(s=>s.start+0.15>=x.start&&s.start+0.15<x.end);
+    return `<div class="row prow" style="align-items:flex-start">
+      <span class="t" onclick="setVideo('preview');setTimeout(()=>seek(${toOut(x.start).toFixed(2)}),300)">${fmt(toOut(x.start))}</span>
+      <div class="grow"><div dir="auto" style="${ar?'font-size:16px;font-family:Tajawal,Inter,sans-serif':''}">${esc(x.text)}</div>${hasTr&&TR[i]?`<div class="mini" dir="auto">${esc(TR[i])}</div>`:''}
+        ${here.map(s=>`<div class="pin"><img src="/media/${PID}/photo_${s.graphic.mode}.jpg" alt=""><span class="mini grow">${esc(s.caption||'Photo')} · ${s.layout}</span><button class="btn sm" onclick="ops([{op:'delete_scene',id:'${s.id}'}],true)">Remove</button></div>`).join('')}</div>
+      <button class="btn sm ${SEL?'pri':''}" ${SEL?'':'disabled'} onclick="placePhoto(${i})">Add photo here</button></div>`}).join('');
+  $('#tab-photos').innerHTML=`<p class="mini" style="margin-top:0">1. Upload your photos (clinic, team, equipment, a scan you're allowed to share). 2. Click a photo to select it. 3. Press <b>Add photo here</b> next to the sentence where it should appear. Never use a photo that shows a patient without written consent.</p>
+   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input type="file" id="phF" accept="image/jpeg,image/png,image/webp" multiple><button class="btn sm pri" id="phUp">Upload</button>
+   <input id="phC" placeholder="caption for the next photo you add (optional)" maxlength="80" style="flex:1;min-width:180px;padding:8px;border:1px solid var(--line);border-radius:9px"></div>
+   <div class="phlib">${lib||'<span class="mini">No photos yet.</span>'}</div>
+   <div style="display:flex;align-items:center;gap:8px;margin:14px 0 4px"><h3 style="margin:0" class="grow">Your script</h3>${!hasTr&&P.language!=='en'?`<button class="btn sm" id="trBtn">Show English translation</button>`:''}</div>
+   ${rows}`;
+  $$('[data-ph]').forEach(b=>b.onclick=()=>{SEL=b.dataset.ph===SEL?null:b.dataset.ph;renderPhotos()});
+  $('#phUp').onclick=uploadPhotos;
+  if($('#trBtn'))$('#trBtn').onclick=()=>ops([{op:'translate_captions',target:'en'}],false);
+}
+async function uploadPhotos(){const fs=[...$('#phF').files];if(!fs.length){toast('Choose one or more photos first.');return}
+  for(const f of fs){const fd=new FormData();fd.append('photo',f);fd.append('place','0');
+    const r=await fetch(`/api/projects/${PID}/photos`,{method:'POST',body:fd,credentials:'same-origin',headers:{'X-CSRF-Token':CSRF}});
+    const j=await r.json().catch(()=>({}));if(!r.ok){toast(j.error||'Upload failed');return}SEL=j.photo}
+  toast(fs.length>1?`${fs.length} photos uploaded — the last one is selected.`:'Photo uploaded and selected — now press “Add photo here” next to a sentence.');renderPhotos()}
+async function placePhoto(i){if(!SEL)return;await ops([{op:'add_photo',photo:SEL,sentence:i,caption:$('#phC').value.trim()}],true)}
 function playheadOut(){const v=$('#vid');return view==='preview'||view==='final'?(v.currentTime||0):0}
 function addGraphic(){const ph=$('#gP').value.trim();const o={op:'add_graphic',asset:$('#gA').value};if(ph)o.phrase=ph;else o.t_out=playheadOut();ops([o],true)}
-async function addPhoto(){const f=$('#phF').files[0];if(!f){toast('Choose a photo first.');return}
-  const fd=new FormData();fd.append('photo',f);fd.append('caption',$('#phC').value);fd.append('phrase',$('#phP').value);fd.append('t_out',playheadOut());
-  const r=await fetch(`/api/projects/${PID}/photos`,{method:'POST',body:fd,credentials:'same-origin',headers:{'X-CSRF-Token':CSRF}});
-  const j=await r.json().catch(()=>({}));if(!r.ok){toast(j.error||j.message||'Upload failed');return}
-  toast(j.message);await waitJob();await openProject(PID);setVideo('preview')}
 async function ops(o,render){const r=await post(`/api/projects/${PID}/ops`,{ops:o,render:!!render});toast(r.message);if(render){await waitJob();}await openProject(PID);if(render)setVideo('preview')}
 async function cmdRun(text){if(!text.trim())return;const r=await post(`/api/projects/${PID}/command`,{text});toast(r.message);if(r.ok){await waitJob();await openProject(PID);setVideo('preview')}}
 $('#cmdBtn').onclick=()=>{cmdRun($('#cmd').value);$('#cmd').value=''};$('#cmd').onkeydown=e=>{if(e.key==='Enter')$('#cmdBtn').click()};

@@ -17,6 +17,7 @@ OPS_SCHEMA = {
     "set_music": {"track": P.MUSIC_TRACKS + ["next", "off", "on"]}, "music_volume": {"delta_db": "int"},
     "zoom": {"delta": "float"}, "caption_mode": {"mode": "original|translated|both", "target": "en|fr|ar"},
     "translate_captions": {"target": "en|fr|ar"}, "set_translation": {"i": "sentence index", "text": "str"}, "set_title": {"text": "str"}, "title_enabled": {"enabled": "bool"}, "undo": {},
+    "add_photo": {"photo": "id", "sentence": "int?", "phrase": "str?", "t_out": "sec?", "caption": "str?"}, "delete_scene": {"id": "str"},
 }
 
 ASSET_WORDS = [("coronary/stent", r"stent|angioplast|balloon"), ("coronary/occlusion", r"clot|heart attack|infarct|ruptur|occlu"),
@@ -227,17 +228,27 @@ def apply(plan, op):
         if not re.fullmatch(r"[0-9a-f]{12}", pid): return "Unknown photo."
         op = {**op, "op": "add_graphic", "asset": f"photo/{pid}", "layout": op.get("layout") or ("split" if plan.get("presenter", True) else "full_graphic")}
         o = "add_graphic"
+        if op.get("sentence") is not None:  # placed next to a line of the script
+            sents = plan["analysis"]["sentences"]; i = int(op["sentence"])
+            if not 0 <= i < len(sents): return "Unknown sentence."
+            op["src_range"] = (sents[i]["start"] - 0.1, sents[i]["end"] + 0.3); op["phrase"] = ""
+    if o == "delete_scene":
+        n = len(plan["scenes"]); plan["scenes"] = [x for x in plan["scenes"] if x["id"] != op.get("id")]
+        return "Removed." if len(plan["scenes"]) < n else "Nothing to remove."
     if o == "add_graphic":
         asset, mode = op["asset"].split("/", 1)
         s = None
-        if (op.get("phrase") or "").strip():
+        if op.get("src_range"):
+            a, b = op["src_range"]
+            s = next((x for x in plan["analysis"]["sentences"] if abs(x["start"] - 0.1 - a) < 0.01), None)
+        elif (op.get("phrase") or "").strip():
             i = _find_phrase(plan, op["phrase"])
             if i is None: return f"Couldn't find where you discuss “{op['phrase']}”."
             s = _sentence_of(plan, i); a, b = s["start"] - 0.1, s["end"] + 0.3
         else:
             a, _ = tl.to_src(float(op.get("t_out") or 0)); b = a + 5
         if b - a < 4.5: b = a + 4.5
-        if asset == "photo": b = max(b, a + 4.0)
+        if asset == "photo": b = min(max(b, a + 4.0), a + 7.0)  # a photo reads in 4–7 s
         default_layout = "split" if asset == "photo" else {"stent": "pip", "occlusion": "split", "narrowing": "side", "sinus": "side", "gauge": "labels", "calcium": "split",
                           "scanner": "split", "coronaries": "split"}.get(mode, "split")
         kept = []

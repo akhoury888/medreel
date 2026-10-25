@@ -33,7 +33,7 @@ def sentences(words):
             out.append(cur); cur = []
     if cur: out.append(cur)
     return [{"i0": s[0], "i1": s[-1], "start": words[s[0]]["start"], "end": words[s[-1]]["end"],
-             "text": " ".join(words[k]["text"] for k in s)} for s in out]
+             "text": " ".join(words[k]["text"] for k in s if not K.is_hesitation(words[k]["text"]))} for s in out]
 
 
 def detect_silences(words, duration, min_gap=0.45, pad=0.12):
