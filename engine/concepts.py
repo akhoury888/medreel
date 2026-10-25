@@ -17,7 +17,7 @@ C = {
     "smoking": ("smoking", {"en": "Smoking", "fr": "Tabac", "ar": "التدخين"}, [r"\bsmok(e|ing|er)|cigarett|\bvap(e|ing)", r"\btabac|cigarette|\bfum(er|eur|e)\b|vapot", r"دخان|تدخين|سيكاره|سجاير|سيجاره|بيدخن|بتدخن|دخن"], "cigarette smoke"),
     "shisha": ("smoking", {"en": "Shisha", "fr": "Narguilé", "ar": "الأركيلة"}, [r"shisha|hookah|narghil|argil", r"narguil|chicha", r"اركيله|نرجيله|ارجيله|شيشه"], "hookah smoke"),
     "quit_smoking": ("smoking-cessation", {"en": "Quit smoking", "fr": "Arrêter de fumer", "ar": "ترك التدخين"}, [r"quit(ting)? smok|stop(ping)? smok|smok\w*[^.]{0,25}\bquit", r"arret\w* de fumer|sevrage tabagique", r"ترك التدخين|وقف التدخين|يوقف دخان|توقف عن التدخين|تترك الدخان|يترك الدخان"], "breaking cigarette"),
-    "copd": ("lungs", {"en": "COPD", "fr": "BPCO", "ar": "الانسداد الرئوي المزمن"}, [r"\bcopd\b|emphysema|chronic bronchitis", r"\bbpco\b|emphyseme|bronchite chronique", r"انسداد رئوي|انتفاخ الرئه|التهاب القصبات المزمن"], None),
+    "copd": ("lungs", {"en": "COPD", "fr": "BPCO", "ar": "الانسداد الرئوي المزمن"}, [r"\bcopd\b|emphysema|chronic bronchitis", r"\bbpco\b|emphyseme|bronchite chronique", r"انسداد (?:ال)?رئوي|انتفاخ الرئه|التهاب القصبات المزمن"], None),
     "pneumonia": ("pneumonia", {"en": "Pneumonia", "fr": "Pneumonie", "ar": "الالتهاب الرئوي"}, [r"pneumonia|chest infection", r"pneumonie|infection pulmonaire", r"التهاب رئوي|التهاب بالرئه|ذات الرئه"], None),
     "tb": ("tb", {"en": "Tuberculosis", "fr": "Tuberculose", "ar": "السلّ"}, [r"tubercul|\btb\b", r"tubercul", r"السل\b|درن"], None),
     "oxygen": ("oxygen-tank", {"en": "Oxygen", "fr": "Oxygène", "ar": "الأكسجين"}, [r"\boxygen", r"oxygen", r"اكسجين|اوكسجين"], "oxygen mask hospital"),
