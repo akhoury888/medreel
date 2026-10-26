@@ -6,7 +6,7 @@ priority. A job whose worker stops heart-beating for 10 minutes is re-queued."""
 import datetime as dt, json, logging, os, socket, threading, time, traceback
 from sqlalchemy import select, update, delete
 from . import config as C
-from .models import Session, Job, Project, User, Usage, now
+from .models import Session, Job, Project, User, Usage, now, ai_credits_left, ai_count, ai_charge, ai_refund
 
 log = logging.getLogger("medreel.jobs")
 
@@ -77,10 +77,15 @@ def run_job(j):
     try:
         if j.kind == "generate":
             src = payload.get("src")
+            budget = {"credits": ai_credits_left(s, u), "image": C.AI_COST["image"], "animation": C.AI_COST["animation"],
+                      "max_images": max(0, C.AI_PER_VIDEO["image"] - ai_count(s, p.id, "image")),
+                      "max_animations": max(0, C.AI_PER_VIDEO["animation"] - ai_count(s, p.id, "animation"))}
             pipeline.create(p.dir, p.mode, src, p.script, p.style, _brand_for(u, plan_cfg), p.language, log=lambda m: None,
-                            progress=lambda x, m: prog(x * 0.5, m), title=None if p.title == "Untitled video" else p.title)
+                            progress=lambda x, m: prog(x * 0.5, m), title=None if p.title == "Untitled video" else p.title, ai_budget=budget)
             plan_path = os.path.join(p.dir, "plan.json")
             plan = json.load(open(plan_path))
+            for kind_, n_ in (plan.get("ai_usage") or {}).items():  # bill the illustrations/animations actually made
+                if n_ and kind_ in C.AI_COST: ai_charge(s, u, p.id, kind_, int(n_))
             if p.title in ("", "Untitled video") and plan["title"].get("text"): p.title = plan["title"]["text"][:300]
             p.language = plan.get("language", p.language)
             s.commit()
@@ -120,7 +125,9 @@ def run_job(j):
             if p: p.status = "error"
         elif p: p.status = "ready" if os.path.exists(os.path.join(p.dir, "plan.json")) else "error"
         friendly = str(e)[:300] if isinstance(e, (RuntimeError, ValueError)) else "Something went wrong while processing this video. Your credit was not used."
-        if j.kind == "animate" and not payload.get("_animated"): friendly = f"The animation could not be made ({str(e)[:120]}). The still illustration is kept."
+        if j.kind == "animate" and not payload.get("_animated"):
+            ai_refund(s, payload.get("usage_ids") or [])  # nothing was made: give the credits back
+            friendly = f"The animation could not be made ({str(e)[:120]}). The still illustration is kept."
         s.execute(update(Job).where(Job.id == j.id).values(state="error", message=friendly, finished_at=now()))
         s.commit()
     finally:

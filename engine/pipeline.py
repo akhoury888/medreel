@@ -23,7 +23,7 @@ def ingest(root, src_path, pid=None):
     return pid, d, dst
 
 
-def analyze_and_plan(d, src, style="modern_educational", branding=None, log=print, progress=None, language="auto", title=None):
+def analyze_and_plan(d, src, style="modern_educational", branding=None, log=print, progress=None, language="auto", title=None, ai_budget=None):
     def p(x, msg):
         log(msg)
         if progress: progress(x, msg)
@@ -38,22 +38,31 @@ def analyze_and_plan(d, src, style="modern_educational", branding=None, log=prin
     plan = P.build_plan(src, backend, words, an, style=style, branding=branding, language=lang)
     if title and len(title) <= 60:  # the doctor's own title beats a sentence picked from the transcript
         plan["title"].update({"text": title, "enabled": True})
-    _stock(plan, d, p)
+    _stock(plan, d, p, ai_budget)
     plan["mode"] = "auto_edit"
     P.save(plan, os.path.join(d, "plan.json"), history=False)
     p(0.8, "Plan ready.")
     return plan
 
 
-def _stock(plan, d, p):
+def _stock(plan, d, p, ai_budget=None):
+    """ai_budget (from the account's AI credits): {"credits", "image", "animation", "max_images", "max_animations"};
+    None = no limit (local/CLI use). What was actually made is recorded in plan["ai_usage"] for billing."""
     from . import broll, imagegen
-    if imagegen.available():
+    plan["ai_usage"] = {"image": 0, "animation": 0}
+    if imagegen.available() and (ai_budget is None or ai_budget["credits"] >= ai_budget["image"]):
         p(0.76, "Creating medical illustrations…")
         try:
-            n = imagegen.auto(plan, d)
-            if n:
+            b = ai_budget
+            cap = None if b is None else max(0, min(b["max_images"], b["credits"] // b["image"]))
+            n = imagegen.auto(plan, d, cap=cap) if cap != 0 else 0
+            plan["ai_usage"]["image"] = n
+            left = None if b is None else b["credits"] - n * b["image"]
+            k_cap = None if b is None else max(0, min(b["max_animations"], left // b["animation"]))
+            if n and k_cap != 0:
                 p(0.78, f"Added {n} illustration(s). Animating the key ones (1–3 min)…")
-                imagegen.auto_animate(plan, d)
+                env_n = int(os.environ.get("MEDREEL_AI_ANIMATE", "2"))
+                plan["ai_usage"]["animation"] = imagegen.auto_animate(plan, d, n=env_n if k_cap is None else min(env_n, k_cap))
         except Exception:
             pass  # illustrations are a bonus: never fail a video because of them
     if not broll.available(): return
@@ -71,14 +80,14 @@ MODES = {"auto_edit": "Upload a recording — AI edits everything",
          "ai_voice": "Prompt or script → video with AI narration (no recording)"}
 
 
-def create(d, mode, src=None, script=None, style="modern_educational", branding=None, language="auto", log=print, progress=None, title=None):
+def create(d, mode, src=None, script=None, style="modern_educational", branding=None, language="auto", log=print, progress=None, title=None, ai_budget=None):
     """Single entry point for all creation modes. Returns the plan (also saved to plan.json)."""
     from . import script_align, synth
     def p(x, msg):
         log(msg)
         if progress: progress(x, msg)
     if mode == "auto_edit" or (mode in ("own_script", "teleprompter") and not (script or "").strip()):
-        return analyze_and_plan(d, src, style, branding, log, progress, language, title)
+        return analyze_and_plan(d, src, style, branding, log, progress, language, title, ai_budget)
     lang = language if language in ("en", "fr", "ar") else script_align.detect_script_language(script)
     if mode == "ai_voice":
         if not synth.available(lang): raise RuntimeError(f"No AI voice installed for '{lang}'. Run tools/setup_models.sh.")
@@ -111,7 +120,7 @@ def create(d, mode, src=None, script=None, style="modern_educational", branding=
             plan["analysis"]["qa"]["issues"].append({"area": "script", "level": "warn",
                 "msg": "The recording doesn't follow the script closely — check caption timing, or switch to automatic captions."})
     if title and len(title) <= 60: plan["title"].update({"text": title, "enabled": True})
-    _stock(plan, d, p)
+    _stock(plan, d, p, ai_budget)
     plan["mode"] = mode
     P.save(plan, os.path.join(d, "plan.json"), history=False)
     p(0.8, "Plan ready.")

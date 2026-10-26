@@ -6,7 +6,7 @@ from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import select
 from . import config as C
-from .models import Session, User, videos_used
+from .models import Session, User, videos_used, ai_credits_left
 
 bp = Blueprint("auth", __name__)
 log = logging.getLogger("medreel.auth")
@@ -53,6 +53,7 @@ def user_payload(u):
             "current_period_end": u.current_period_end.isoformat() if u.current_period_end else None,
             "cancel_at_period_end": u.cancel_at_period_end,
             "usage": {"used": videos_used(Session, u), "limit": p["videos"], "watermark": p["watermark"]},
+            "ai": {"left": ai_credits_left(Session, u), "limit": p["ai_credits"]},
             "csrf": session.get("csrf"), "billing_live": bool(C.STRIPE_SECRET_KEY), "dev": C.DEV_MODE}
 
 

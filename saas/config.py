@@ -28,16 +28,21 @@ SMTP_USER, SMTP_PASSWORD, MAIL_FROM = env("SMTP_USER"), env("SMTP_PASSWORD"), en
 # Plans. Prices are shown on the site; what is actually charged is the Stripe Price object
 # (STRIPE_PRICE_<PLAN>). Change both together.
 PLANS = {
-    "free":    {"name": "Free",    "price": 0,   "videos": 1,   "watermark": True,  "priority": False, "seats": 1,
-                "features": ["1 video per month", "All 4 creation modes", "Arabic, English, French", "MedReel watermark"]},
-    "starter": {"name": "Starter", "price": 49,  "videos": 8,   "watermark": False, "priority": False, "seats": 1,
-                "features": ["8 videos per month", "No watermark", "Your branding and logo", "Subtitles in 3 languages"]},
-    "pro":     {"name": "Pro",     "price": 129, "videos": 30,  "watermark": False, "priority": True,  "seats": 1,
-                "features": ["30 videos per month", "Priority rendering", "AI scripts and teleprompter", "Everything in Starter"]},
-    "clinic":  {"name": "Clinic",  "price": 349, "videos": 100, "watermark": False, "priority": True,  "seats": 5,
-                "features": ["100 videos per month", "Up to 5 physicians (coming soon)", "Priority rendering", "Everything in Pro"]},
+    "free":    {"name": "Free",    "price": 0,   "videos": 1,   "watermark": True,  "priority": False, "seats": 1, "ai_credits": 10,
+                "features": ["1 video per month", "10 AI credits (illustrations)", "All 4 creation modes", "Arabic, English, French", "MedReel watermark"]},
+    "starter": {"name": "Starter", "price": 49,  "videos": 8,   "watermark": False, "priority": False, "seats": 1, "ai_credits": 150,
+                "features": ["8 videos per month", "150 AI credits for illustrations & animations", "No watermark", "Your branding and logo", "Subtitles in 3 languages"]},
+    "pro":     {"name": "Pro",     "price": 129, "videos": 30,  "watermark": False, "priority": True,  "seats": 1, "ai_credits": 500,
+                "features": ["30 videos per month", "500 AI credits for illustrations & animations", "Priority rendering", "AI scripts and teleprompter", "Everything in Starter"]},
+    "clinic":  {"name": "Clinic",  "price": 349, "videos": 100, "watermark": False, "priority": True,  "seats": 5, "ai_credits": 1500,
+                "features": ["100 videos per month", "1,500 AI credits for illustrations & animations", "Up to 5 physicians (coming soon)", "Priority rendering", "Everything in Pro"]},
 }
 CURRENCY = env("PRICE_CURRENCY", "USD")
+for _k in PLANS:  # AI credit allowance can be tuned without code changes: AI_CREDITS_STARTER=200 …
+    PLANS[_k]["ai_credits"] = int(env(f"AI_CREDITS_{_k.upper()}", PLANS[_k]["ai_credits"]))
+# What each AI action costs in credits (1 credit ≈ US$0.03 of fal.ai cost) and the hard ceiling per video
+AI_COST = {"image": int(env("AI_COST_IMAGE", "1")), "animation": int(env("AI_COST_ANIMATION", "10"))}
+AI_PER_VIDEO = {"image": int(env("AI_MAX_IMAGES_PER_VIDEO", "12")), "animation": int(env("AI_MAX_ANIMATIONS_PER_VIDEO", "4"))}
 for _k in PLANS:
     PLANS[_k]["stripe_price"] = env(f"STRIPE_PRICE_{_k.upper()}")
 ACTIVE_STATUSES = {"active", "trialing", "past_due"}  # past_due keeps access while Stripe retries the card

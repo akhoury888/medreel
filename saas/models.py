@@ -92,6 +92,18 @@ class Usage(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=now, index=True)
 
 
+class AIUsage(Base):
+    """One row per paid AI action (illustration, animation). Kept when projects are deleted, so the monthly
+    allowance can't be reset by deleting videos; a failed action is removed (refunded)."""
+    __tablename__ = "ai_usage"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(32), index=True)
+    project_id: Mapped[str] = mapped_column(String(32), index=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    credits: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=now, index=True)
+
+
 class StripeEvent(Base):
     """Processed webhook event ids — makes webhook handling idempotent."""
     __tablename__ = "stripe_events"
@@ -121,3 +133,33 @@ def month_start():
 def videos_used(db, user):
     """Videos created this calendar month (UTC) that consumed a credit."""
     return db.scalar(select(func.count(Usage.id)).where(Usage.user_id == user.id, Usage.created_at >= month_start())) or 0
+
+
+def ai_credits_used(db, user):
+    return db.scalar(select(func.coalesce(func.sum(AIUsage.credits), 0)).where(AIUsage.user_id == user.id, AIUsage.created_at >= month_start())) or 0
+
+
+def ai_credits_left(db, user):
+    return max(0, C.PLANS[user.effective_plan()]["ai_credits"] - ai_credits_used(db, user))
+
+
+def ai_count(db, project_id, kind):
+    """Paid AI actions of this kind ever made for a project (the per-video ceiling)."""
+    return db.scalar(select(func.count(AIUsage.id)).where(AIUsage.project_id == project_id, AIUsage.kind == kind)) or 0
+
+
+def ai_charge(db, user, project_id, kind, n=1):
+    """Record n actions; returns the row ids (to refund on failure)."""
+    rows = [AIUsage(user_id=user.id, project_id=project_id, kind=kind, credits=C.AI_COST[kind]) for _ in range(n)]
+    db.add_all(rows); db.commit()
+    return [r.id for r in rows]
+
+
+def ai_refund(db, ids):
+    if ids: db.execute(AIUsage.__table__.delete().where(AIUsage.id.in_(list(ids)))); db.commit()
+
+
+def ai_status(db, user, project_id=None):
+    out = {"left": ai_credits_left(db, user), "monthly": C.PLANS[user.effective_plan()]["ai_credits"], "cost": C.AI_COST, "per_video": C.AI_PER_VIDEO}
+    if project_id: out["video"] = {k: ai_count(db, project_id, k) for k in C.AI_PER_VIDEO}
+    return out

@@ -140,7 +140,9 @@ $$('.seg button').forEach(b=>b.onclick=()=>setVideo(b.dataset.v));
 $$('#tabs button').forEach(b=>b.onclick=()=>{$$('#tabs button').forEach(x=>x.classList.toggle('on',x===b));['edits','gfx','photos','tx','review','brand'].forEach(t=>$('#tab-'+t).classList.toggle('hide',t!==b.dataset.t))});
 const seek=t=>{if(t==null)return;const v=$('#vid');v.currentTime=t;v.play()};
 
+let AI=null;
 function renderAll(r){
+  AI=r.ai||null;
   const o=P._out, cuts=P.cuts, nf=cuts.filter(c=>c.reason==='filler'&&!c.enabled).length;
   $('#stats').innerHTML=`<div class="stat"><b>${fmt(P.source.duration)}</b><small>original</small></div><div class="stat"><b>${fmt(o.duration)}</b><small>edited (−${o.removed}s)</small></div>
   <div class="stat"><b>${P.scenes.filter(s=>s.enabled!==false).length}</b><small>medical graphics</small></div><div class="stat"><b>${P.analysis.qa.score}</b><small>quality · ${esc((P.language||'en').toUpperCase())} · ${esc(P.asr)}</small></div>`;
@@ -204,6 +206,7 @@ function renderAll(r){
 function keeps(){const d=P.source.duration,c=P.cuts.filter(c=>c.enabled).map(c=>[Math.max(0,c.start),Math.min(d,c.end)]).sort((a,b)=>a[0]-b[0]);const m=[];
   for(const [a,b] of c){if(b<=a)continue;if(m.length&&a<=m[m.length-1][1]+.05)m[m.length-1][1]=Math.max(m[m.length-1][1],b);else m.push([a,b])}
   const k=[];let t=0;for(const [a,b] of m){if(a-t>.12)k.push([t,a]);t=b}if(d-t>.12)k.push([t,d]);return k}
+function canAI(k){return !AI||(AI.left>=AI.cost[k]&&AI.video[k]<AI.per_video[k])}
 let PHOTOS=[], SEL=null, SELV=null, STOCK=[], STOCKQ='';
 function toOut(t){let o=0;for(const [a,b] of keeps()){if(t<a)return o;if(t<=b)return o+(t-a);o+=b-a}return o}
 async function loadPhotos(){try{PHOTOS=(await api(`/api/projects/${PID}/photos`)).photos||[]}catch(e){PHOTOS=[]}}
@@ -220,8 +223,8 @@ async function renderPhotos(){
     return `<div class="row prow" style="align-items:flex-start">
       <span class="t" onclick="setVideo('preview');setTimeout(()=>seek(${toOut(x.start).toFixed(2)}),300)">${fmt(toOut(x.start))}</span>
       <div class="grow"><div dir="auto" style="${ar?'font-size:16px;font-family:Tajawal,Inter,sans-serif':''}">${esc(x.text)}</div>${hasTr&&TR[i]?`<div class="mini" dir="auto">${esc(TR[i])}</div>`:''}
-        ${here.map(s=>`<div class="pin"><img src="${thumb(s)}" alt=""><span class="mini grow">${esc(s.graphic.animated?'Animated illustration':s.graphic.asset==='broll'?'Stock video':s.graphic.fill?'AI illustration':(s.caption||'Photo'))} · ${s.layout}</span>${s.graphic.fill&&META.ai_images?`<button class="btn sm" onclick="animateScene('${s.id}')" title="Turns the image into a 5-second animated clip (about 35 US cents)">🎬 Animate</button><button class="btn sm" onclick="genImage(${i},'${s.id}')">↻ Regenerate</button>`:''}<button class="btn sm" onclick="ops([{op:'delete_scene',id:'${s.id}'}],true)">Remove</button></div>`).join('')}</div>
-      <div style="display:flex;flex-direction:column;gap:6px">${META.ai_images?`<button class="btn sm pri" onclick="genImage(${i})">✨ Generate image</button>`:''}<button class="btn sm ${any?'pri':''}" ${any?'':'disabled'} onclick="placePhoto(${i})">${SELV?'Add video here':'Add photo here'}</button></div></div>`}).join('');
+        ${here.map(s=>`<div class="pin"><img src="${thumb(s)}" alt=""><span class="mini grow">${esc(s.graphic.animated?'Animated illustration':s.graphic.asset==='broll'?'Stock video':s.graphic.fill?'AI illustration':(s.caption||'Photo'))} · ${s.layout}</span>${s.graphic.fill&&META.ai_images?`<button class="btn sm" ${canAI('animation')?'':'disabled'} onclick="animateScene('${s.id}')" title="Turns the image into a 5-second animated clip (${AI?AI.cost.animation:10} AI credits)">🎬 Animate</button><button class="btn sm" ${canAI('image')?'':'disabled'} onclick="genImage(${i},'${s.id}')">↻ Regenerate</button>`:''}<button class="btn sm" onclick="ops([{op:'delete_scene',id:'${s.id}'}],true)">Remove</button></div>`).join('')}</div>
+      <div style="display:flex;flex-direction:column;gap:6px">${META.ai_images?`<button class="btn sm pri" ${canAI('image')?'':'disabled'} onclick="genImage(${i})">✨ Generate image</button>`:''}<button class="btn sm ${any?'pri':''}" ${any?'':'disabled'} onclick="placePhoto(${i})">${SELV?'Add video here':'Add photo here'}</button></div></div>`}).join('');
   const stock=META.stock?`<h3>Stock videos <span class="mini">— free footage, <a href="${esc(META.stock.url)}" target="_blank" rel="noopener">videos provided by ${esc(META.stock.name)}</a></span></h3>
    <div style="display:flex;gap:8px"><input id="stQ" value="${esc(STOCKQ)}" placeholder="search in English, e.g. inhaler, lungs, jogging" style="flex:1;padding:8px;border:1px solid var(--line);border-radius:9px"><button class="btn sm" id="stGo">Search</button></div>
    <div class="phlib">${STOCK.map(v=>`<button class="ph ${v.id===SELV?'on':''}" data-st="${v.id}" title="${esc((v.user||'')+' · '+(v.duration||'')+'s')}"><img src="${esc(v.image||'')}" alt="" referrerpolicy="no-referrer"></button>`).join('')}</div>`
@@ -231,7 +234,8 @@ async function renderPhotos(){
    <input id="phC" placeholder="caption for the next photo you add (optional)" maxlength="80" style="flex:1;min-width:180px;padding:8px;border:1px solid var(--line);border-radius:9px"></div>
    <div class="phlib">${lib||'<span class="mini">No photos yet.</span>'}</div>
    ${stock}
-   ${META.ai_images?`<h3>AI illustrations</h3><p class="mini" style="margin-top:0">Press <b>✨ Generate image</b> next to a sentence: an illustration is created for what you say there (about 3 US cents each). To choose the image yourself, describe it here first (in English works best): <input id="aiBrief" placeholder="optional, e.g. inflamed airways inside the lungs during an asthma attack" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:9px;margin-top:6px"></p><p class="mini">AI images can get anatomy wrong — check each one before you export.</p>`:''}
+   ${META.ai_images&&AI?`<div class="claim" style="display:flex;gap:14px;flex-wrap:wrap;align-items:center"><b>AI credits: ${AI.left} of ${AI.monthly} left this month</b><span class="mini">Illustration = ${AI.cost.image} credit · animation = ${AI.cost.animation} credits · this video: ${AI.video.image}/${AI.per_video.image} illustrations, ${AI.video.animation}/${AI.per_video.animation} animations</span></div>`:''}
+   ${META.ai_images?`<h3>AI illustrations</h3><p class="mini" style="margin-top:0">Press <b>✨ Generate image</b> next to a sentence: an illustration is created for what you say there. To choose the image yourself, describe it here first (in English works best): <input id="aiBrief" placeholder="optional, e.g. inflamed airways inside the lungs during an asthma attack" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:9px;margin-top:6px"></p><p class="mini">AI images can get anatomy wrong — check each one before you export.</p>`:''}
    <div style="display:flex;align-items:center;gap:8px;margin:14px 0 4px"><h3 style="margin:0" class="grow">Your script</h3>${!hasTr&&P.language!=='en'?`<button class="btn sm" id="trBtn">Show English translation</button>`:''}</div>
    ${rows}`;
   $$('[data-ph]').forEach(b=>b.onclick=()=>{SEL=b.dataset.ph===SEL?null:b.dataset.ph;SELV=null;renderPhotos()});

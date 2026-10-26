@@ -479,7 +479,7 @@ const views={
   async dashboard(){mount('t-dashboard');
     $('#hello').textContent=ME.name?`Your videos, ${ME.name.split(' ').slice(0,2).join(' ')}`:'Your videos';
     $('#planLine').textContent=`${ME.plan_name} plan`+(ME.usage.watermark?' · videos carry a small MedReel watermark':'');
-    $('#useNum').textContent=`${ME.usage.used} of ${ME.usage.limit}`;$('#useBar').style.width=Math.min(100,100*ME.usage.used/Math.max(1,ME.usage.limit))+'%';
+    $('#useNum').textContent=`${ME.usage.used} of ${ME.usage.limit}`+(ME.ai?` · AI credits ${ME.ai.left} of ${ME.ai.limit} left`:'');$('#useBar').style.width=Math.min(100,100*ME.usage.used/Math.max(1,ME.usage.limit))+'%';
     await loadVids()},
   async new(){await newView()},
   async settings(){await settingsView()},
@@ -616,7 +616,7 @@ async function billingView(){mount('t-billing');await refreshMe();
   $('#devNote').classList.toggle('hide',!(ME.dev&&!ME.billing_live));
   renderBill()}
 function renderBill(){const u=ME;const p=PLANS[u.plan];
-  let line=`${p.name} plan · ${u.usage.used} of ${u.usage.limit} videos used this month`;
+  let line=`${p.name} plan · ${u.usage.used} of ${u.usage.limit} videos used this month`+(u.ai?` · ${u.ai.left} of ${u.ai.limit} AI credits left`:'');
   if(u.plan!=='free'&&u.current_period_end){const d=new Date(u.current_period_end+'Z').toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});line+=u.cancel_at_period_end?` · ends on ${d}`:` · renews on ${d}`}
   if(u.sub_status==='past_due')line+=' · payment failed — update your card in Manage billing';
   $('#billLine').textContent=line;$('#portalBtn').classList.toggle('hide',!(u.billing_live&&u.subscribed_plan!=='free'));

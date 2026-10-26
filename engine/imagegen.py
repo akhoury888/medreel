@@ -134,7 +134,7 @@ def generate(brief, project_dir, style="3d", accent="#2EA0FF", caption="", seed=
     return pid
 
 
-def auto(plan, project_dir, want=None, log_fn=None):
+def auto(plan, project_dir, want=None, log_fn=None, cap=None):
     """Illustrate the best moments of a new video. Procedural medical animations are kept; an AI image replaces the
     icon card (or fills the gap) at its sentence. Best effort — failures leave the plan as it was."""
     if not available(): return 0
@@ -142,6 +142,8 @@ def auto(plan, project_dir, want=None, log_fn=None):
     presenter = plan.get("presenter", True)
     dur = plan["source"]["duration"]
     want = want if want is not None else int(os.environ.get("MEDREEL_AI_IMAGES", "0") or 0) or max(2, min(6, int(dur / 10)))
+    if cap is not None: want = min(want, cap)  # the account's AI credits / per-video ceiling
+    if want <= 0: return 0
     sents = plan["analysis"]["sentences"]
     words = plan["transcript"]
     busy = [(s["start"], s["end"]) for s in plan["scenes"] if s["graphic"]["asset"] not in ("icons",)]

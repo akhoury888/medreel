@@ -4,7 +4,7 @@ from flask import Blueprint, request, jsonify, abort, send_from_directory
 from sqlalchemy import select
 from . import config as C, jobs
 from .auth import current_user, login_required
-from .models import Session, Project, Usage, Job, videos_used, now
+from .models import Session, Project, Usage, Job, videos_used, now, ai_credits_left, ai_count, ai_charge, ai_status
 
 bp = Blueprint("api", __name__)
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi", ".3gp"}
@@ -138,6 +138,7 @@ def get_project(pid):
         plan["branding"].pop("logo", None)
     hist = path + ".history.json"
     return jsonify({"id": p.id, "title": p.title, "mode": p.mode, "status": jobs.job_payload(jobs.latest(p.id)), "plan": plan,
+                    "ai": ai_status(Session, current_user(), p.id),
                     "renders": {k: os.path.exists(os.path.join(p.dir, "renders", k + ".mp4")) for k in ("preview", "final")},
                     "can_undo": os.path.exists(hist) and len(json.load(open(hist))) > 0})
 
@@ -154,6 +155,18 @@ def rename(pid):
     p = _own(pid); t = ((request.get_json(force=True, silent=True) or {}).get("title") or "").strip()
     if t: p.title = t[:300]; Session.commit()
     return jsonify({"ok": True, "title": p.title})
+
+
+def _ai_guard(p, kind):
+    """Refuse an AI action the account or this video can't afford (HTTP 402 with a clear message)."""
+    u = current_user(); cost = C.AI_COST[kind]
+    if ai_count(Session, p.id, kind) >= C.AI_PER_VIDEO[kind]:
+        what = "illustrations" if kind == "image" else "animations"
+        return jsonify({"error": f"This video already has the maximum of {C.AI_PER_VIDEO[kind]} AI {what}."}), 402
+    if ai_credits_left(Session, u) < cost:
+        return jsonify({"error": f"Not enough AI credits left this month (this needs {cost}). They renew on the 1st — or upgrade your plan.",
+                        "upgrade": True}), 402
+    return None
 
 
 def _busy(p):
@@ -276,6 +289,8 @@ def ai_image(pid):
     p = _own(pid)
     if _busy(p): abort(409, "Wait until the first edit is finished.")
     if not imagegen.available(): abort(503, "AI illustrations need a fal.ai key (FAL_KEY).")
+    refused = _ai_guard(p, "image")
+    if refused: return refused
     b = request.get_json(force=True, silent=True) or {}
     plan = json.load(open(_plan_path(p)))
     sents = plan["analysis"]["sentences"]
@@ -295,6 +310,7 @@ def ai_image(pid):
         photo = imagegen.generate(brief, p.dir, plan["branding"].get("image_style", "3d"), plan["branding"].get("primary", "#2EA0FF"))
     except Exception as e:
         abort(502, f"The image service didn't answer ({str(e)[:80]}). Try again.")
+    ai_charge(Session, current_user(), p.id, "image")
     ops = []
     if b.get("replace"): ops.append({"op": "delete_scene", "id": str(b["replace"])[:40]})
     ops.append({"op": "add_photo", "photo": photo, "sentence": i, "fill": True, "caption": ""})
@@ -314,7 +330,10 @@ def animate_scene(pid):
     plan = json.load(open(_plan_path(p)))
     sc = next((x for x in plan["scenes"] if x["id"] == sid), None)
     if not sc or sc["graphic"]["asset"] != "photo" or not sc["graphic"].get("fill"): abort(400, "Only AI illustrations can be animated.")
-    jobs.enqueue(p, "animate", {"scene": sid}, priority=_prio())
+    refused = _ai_guard(p, "animation")
+    if refused: return refused
+    ids = ai_charge(Session, current_user(), p.id, "animation")  # reserved now, refunded if the animation fails
+    jobs.enqueue(p, "animate", {"scene": sid, "usage_ids": ids}, priority=_prio())
     return jsonify({"ok": True, "message": "Animating — this takes 1–3 minutes."})
 
 
