@@ -17,7 +17,7 @@ OPS_SCHEMA = {
     "set_music": {"track": P.MUSIC_TRACKS + ["next", "off", "on"]}, "music_volume": {"delta_db": "int"},
     "zoom": {"delta": "float"}, "caption_mode": {"mode": "original|translated|both", "target": "en|fr|ar"},
     "translate_captions": {"target": "en|fr|ar"}, "set_translation": {"i": "sentence index", "text": "str"}, "set_title": {"text": "str"}, "title_enabled": {"enabled": "bool"}, "undo": {},
-    "add_broll": {"clip": "id", "sentence": "int?"}, "add_photo": {"photo": "id", "sentence": "int?", "phrase": "str?", "t_out": "sec?", "caption": "str?"}, "delete_scene": {"id": "str"},
+    "add_broll": {"clip": "id", "sentence": "int?"}, "image_style": {"style": "3d|flat|photo"}, "add_photo": {"photo": "id", "sentence": "int?", "phrase": "str?", "t_out": "sec?", "caption": "str?"}, "delete_scene": {"id": "str"},
 }
 
 ASSET_WORDS = [("coronary/stent", r"stent|angioplast|balloon"), ("coronary/occlusion", r"clot|heart attack|infarct|ruptur|occlu"),
@@ -268,8 +268,9 @@ def apply(plan, op):
         plan["scenes"].append({"id": f"scn_{uuid.uuid4().hex[:6]}", "start": round(a, 3), "end": round(b, 3), "layout": op.get("layout") or default_layout,
                                "graphic": {"asset": asset, "mode": mode, "label": "Photo" if asset == "photo" else "Stock video" if asset == "broll" else op["asset"]}, "text": s["text"] if s else "",
                                "auto": False, "enabled": True, **({"caption": str(op.get("caption") or "")[:80]} if asset == "photo" else {})})
+        if asset == "photo" and op.get("fill"): plan["scenes"][-1]["graphic"]["fill"] = True
         plan["scenes"].sort(key=lambda x: x["start"])
-        what = "photo" if asset == "photo" else "stock video" if asset == "broll" else f"{op['asset'].replace('/', ' ')} animation"
+        what = ("illustration" if op.get("fill") else "photo") if asset == "photo" else "stock video" if asset == "broll" else f"{op['asset'].replace('/', ' ')} animation"
         return f"Added the {what} at {tl.to_out(a):.1f}s ({op.get('layout') or default_layout} layout)."
     if o == "remove_graphics":
         before = len(plan["scenes"])
@@ -334,7 +335,7 @@ def apply(plan, op):
                 return f"Scene updated ({x['layout']}{'' if x.get('enabled', True) else ', disabled'})."
         return "Scene not found."
     if o == "set_branding":
-        plan["branding"].update({k: v for k, v in op["fields"].items() if k in plan["branding"] or k in ("logo",)}); return "Branding updated."
+        plan["branding"].update({k: v for k, v in op["fields"].items() if k in plan["branding"] or k in ("logo", "image_style")}); return "Branding updated."
     return f"Unknown op {o}"
 
 

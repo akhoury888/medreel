@@ -23,7 +23,7 @@ LAYOUTS = ["full", "side", "pip", "full_graphic", "split", "labels"]
 
 DEFAULT_BRAND = {"name": "Dr. Antoine El Khoury", "specialty": "Interventional & Structural Cardiology", "clinic": "",
                  "logo": None, "primary": "#2EA0FF", "secondary": "#0B1730", "font": "Poppins", "website": "",
-                 "booking": "", "phone": "", "intro": "none", "outro": True, "lower_third": True,
+                 "booking": "", "phone": "", "intro": "none", "outro": True, "lower_third": True, "image_style": "3d",
                  "disclaimer": "Educational content — not individual medical advice."}
 
 

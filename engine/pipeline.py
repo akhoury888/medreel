@@ -46,7 +46,14 @@ def analyze_and_plan(d, src, style="modern_educational", branding=None, log=prin
 
 
 def _stock(plan, d, p):
-    from . import broll
+    from . import broll, imagegen
+    if imagegen.available():
+        p(0.76, "Creating medical illustrations…")
+        try:
+            n = imagegen.auto(plan, d)
+            if n: p(0.78, f"Added {n} illustration(s).")
+        except Exception:
+            pass  # illustrations are a bonus: never fail a video because of them
     if not broll.available(): return
     p(0.78, "Adding stock footage…")
     try:

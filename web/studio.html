@@ -152,7 +152,7 @@ function renderAll(r){
   // graphics
   const L=META.layouts.map(l=>`<option>${l}</option>`).join('');
   $('#tab-gfx').innerHTML=(P.scenes.length?'':'<p class="mut">No graphics yet.</p>')+P.scenes.map(s=>{const ot=o.scenes[s.id]||[];return `<div class="row"><span class="t" onclick="setVideo('preview');setTimeout(()=>seek(${ot[0]}),300)">${fmt(ot[0])}</span>
-    <div class="grow"><b>${esc(s.graphic.asset==='icons'?'Icon card — '+s.graphic.label:s.graphic.asset==='broll'?'Stock video — '+s.graphic.label:s.graphic.asset==='photo'?'Your photo':(META.assets[s.graphic.asset+'/'+s.graphic.mode]||s.graphic.label))}</b><div class="mini">${esc(s.caption||s.text||'')}</div></div>
+    <div class="grow"><b>${esc(s.graphic.asset==='icons'?'Icon card — '+s.graphic.label:s.graphic.asset==='broll'?'Stock video — '+s.graphic.label:s.graphic.asset==='photo'?(s.graphic.fill?'AI illustration':'Your photo'):(META.assets[s.graphic.asset+'/'+s.graphic.mode]||s.graphic.label))}</b><div class="mini">${esc(s.caption||s.text||'')}</div></div>
     ${s.layout==='overlay'?'':`<select onchange="ops([{op:'scene_update',id:'${s.id}',layout:this.value}],true)">${L.replace(`<option>${s.layout}</option>`,`<option selected>${s.layout}</option>`)}</select>`}
     <label class="sw"><input type="checkbox" ${s.enabled!==false?'checked':''} onchange="ops([{op:'scene_update',id:'${s.id}',enabled:this.checked}],true)"><span></span></label></div>`}).join('')+
    `<h3>Add a graphic</h3><div style="display:flex;gap:8px;flex-wrap:wrap"><select id="gA" style="max-width:100%">${Object.entries(META.assets).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select><input id="gP" placeholder="when I say… (or leave empty: at the current video time)" style="flex:1;min-width:200px;padding:8px;border:1px solid var(--line);border-radius:9px"><button class="btn sm pri" onclick="addGraphic()">Add</button></div>
@@ -185,7 +185,8 @@ function renderAll(r){
    <label class="f">Subtitles<select id="sCap">${META.captions.map(c=>`<option ${c==P.captions.style?'selected':''}>${c}</option>`).join('')}</select></label>
    <label class="f">Subtitle language<select id="sCapLang">${[['original','Spoken language'],['translated:en','Translated to English'],['translated:fr','Translated to French'],['both:en','Bilingual — spoken + English'],['both:fr','Bilingual — spoken + French']].map(([v,l])=>`<option value="${v}" ${v===(cm==='original'?'original':cm+':'+(P.captions.target||'en'))?'selected':''}>${l}</option>`).join('')}</select></label>
    <label class="f">Music<select id="sMus"><option value="off">off</option>${META.music.map(c=>`<option ${P.music.enabled&&c==P.music.track?'selected':''}>${c}</option>`).join('')}</select></label>
-   <label class="f">Opening title<input id="sTitle" value="${esc(P.title.text)}"></label></div>
+   <label class="f">Opening title<input id="sTitle" value="${esc(P.title.text)}"></label>
+   <label class="f">AI illustration style<select data-pb="image_style">${[['3d','3D medical'],['flat','Flat illustration'],['photo','Photo-realistic']].map(([v,l])=>`<option value="${v}" ${(b.image_style||'3d')===v?'selected':''}>${l}</option>`).join('')}</select></label></div>
    <h3>Branding</h3><div class="grid2">${BRAND_FIELDS.map(([k,l,t])=>`<label class="f">${l}<input data-pb="${k}" type="${t||'text'}" value="${esc(b[k]||'')}"></label>`).join('')}
    <label class="f" style="grid-column:1/-1">Disclaimer on end card<input data-pb="disclaimer" value="${esc(b.disclaimer||'')}"></label></div>
    <div style="margin-top:12px;display:flex;gap:8px"><button class="btn pri" id="saveBrand">Save & update preview</button><button class="btn" style="color:var(--bad)" id="delBtn">Delete project & recording</button></div>`;
@@ -219,8 +220,8 @@ async function renderPhotos(){
     return `<div class="row prow" style="align-items:flex-start">
       <span class="t" onclick="setVideo('preview');setTimeout(()=>seek(${toOut(x.start).toFixed(2)}),300)">${fmt(toOut(x.start))}</span>
       <div class="grow"><div dir="auto" style="${ar?'font-size:16px;font-family:Tajawal,Inter,sans-serif':''}">${esc(x.text)}</div>${hasTr&&TR[i]?`<div class="mini" dir="auto">${esc(TR[i])}</div>`:''}
-        ${here.map(s=>`<div class="pin"><img src="${thumb(s)}" alt=""><span class="mini grow">${esc(s.graphic.asset==='broll'?'Stock video':(s.caption||'Photo'))} · ${s.layout}</span><button class="btn sm" onclick="ops([{op:'delete_scene',id:'${s.id}'}],true)">Remove</button></div>`).join('')}</div>
-      <button class="btn sm ${any?'pri':''}" ${any?'':'disabled'} onclick="placePhoto(${i})">${SELV?'Add video here':'Add photo here'}</button></div>`}).join('');
+        ${here.map(s=>`<div class="pin"><img src="${thumb(s)}" alt=""><span class="mini grow">${esc(s.graphic.asset==='broll'?'Stock video':s.graphic.fill?'AI illustration':(s.caption||'Photo'))} · ${s.layout}</span>${s.graphic.fill&&META.ai_images?`<button class="btn sm" onclick="genImage(${i},'${s.id}')">↻ Regenerate</button>`:''}<button class="btn sm" onclick="ops([{op:'delete_scene',id:'${s.id}'}],true)">Remove</button></div>`).join('')}</div>
+      <div style="display:flex;flex-direction:column;gap:6px">${META.ai_images?`<button class="btn sm pri" onclick="genImage(${i})">✨ Generate image</button>`:''}<button class="btn sm ${any?'pri':''}" ${any?'':'disabled'} onclick="placePhoto(${i})">${SELV?'Add video here':'Add photo here'}</button></div></div>`}).join('');
   const stock=META.stock?`<h3>Stock videos <span class="mini">— free footage, <a href="${esc(META.stock.url)}" target="_blank" rel="noopener">videos provided by ${esc(META.stock.name)}</a></span></h3>
    <div style="display:flex;gap:8px"><input id="stQ" value="${esc(STOCKQ)}" placeholder="search in English, e.g. inhaler, lungs, jogging" style="flex:1;padding:8px;border:1px solid var(--line);border-radius:9px"><button class="btn sm" id="stGo">Search</button></div>
    <div class="phlib">${STOCK.map(v=>`<button class="ph ${v.id===SELV?'on':''}" data-st="${v.id}" title="${esc((v.user||'')+' · '+(v.duration||'')+'s')}"><img src="${esc(v.image||'')}" alt="" referrerpolicy="no-referrer"></button>`).join('')}</div>`
@@ -230,6 +231,7 @@ async function renderPhotos(){
    <input id="phC" placeholder="caption for the next photo you add (optional)" maxlength="80" style="flex:1;min-width:180px;padding:8px;border:1px solid var(--line);border-radius:9px"></div>
    <div class="phlib">${lib||'<span class="mini">No photos yet.</span>'}</div>
    ${stock}
+   ${META.ai_images?`<h3>AI illustrations</h3><p class="mini" style="margin-top:0">Press <b>✨ Generate image</b> next to a sentence: an illustration is created for what you say there (about 3 US cents each). To choose the image yourself, describe it here first (in English works best): <input id="aiBrief" placeholder="optional, e.g. inflamed airways inside the lungs during an asthma attack" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:9px;margin-top:6px"></p><p class="mini">AI images can get anatomy wrong — check each one before you export.</p>`:''}
    <div style="display:flex;align-items:center;gap:8px;margin:14px 0 4px"><h3 style="margin:0" class="grow">Your script</h3>${!hasTr&&P.language!=='en'?`<button class="btn sm" id="trBtn">Show English translation</button>`:''}</div>
    ${rows}`;
   $$('[data-ph]').forEach(b=>b.onclick=()=>{SEL=b.dataset.ph===SEL?null:b.dataset.ph;SELV=null;renderPhotos()});
@@ -243,6 +245,10 @@ async function uploadPhotos(){const fs=[...$('#phF').files];if(!fs.length){toast
     const r=await fetch(`/api/projects/${PID}/photos`,{method:'POST',body:fd,credentials:'same-origin',headers:{'X-CSRF-Token':CSRF}});
     const j=await r.json().catch(()=>({}));if(!r.ok){toast(j.error||'Upload failed');return}SEL=j.photo}
   toast(fs.length>1?`${fs.length} photos uploaded — the last one is selected.`:'Photo uploaded and selected — now press “Add photo here” next to a sentence.');renderPhotos()}
+async function genImage(i,replace){const brief=($('#aiBrief')&&$('#aiBrief').value.trim())||'';toast('Creating the illustration… (about 10–20 seconds)');
+  const r=await fetch(`/api/projects/${PID}/ai_image`,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},body:JSON.stringify({sentence:i,brief,replace:replace||''})});
+  const j=await r.json().catch(()=>({}));if(!r.ok){toast(j.error||'The illustration could not be created.');return}
+  toast('Illustration added — updating the preview…');await waitJob();await openProject(PID);setVideo('preview');$('#tabs button[data-t=photos]').click()}
 async function searchStock(){STOCKQ=$('#stQ').value.trim();if(!STOCKQ)return;const r=await fetch('/api/stock/search?q='+encodeURIComponent(STOCKQ),{credentials:'same-origin'});
   const j=await r.json().catch(()=>({}));if(!r.ok){toast(j.error||'Search failed');return}STOCK=j.results||[];SELV=null;if(!STOCK.length)toast('No videos found — try other words.');renderPhotos()}
 async function placePhoto(i){

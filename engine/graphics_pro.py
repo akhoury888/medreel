@@ -501,12 +501,26 @@ def _photo(path, w, h):
     return im, bg.astype(np.uint8)
 
 
-def photo(W, H, t, D, mode="", accent=(46, 160, 255), title=None, lang="en", **_):
+@functools.lru_cache(maxsize=12)
+def _photo_full(path):
+    return cv2.cvtColor(cv2.imread(path, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
+
+
+def photo(W, H, t, D, mode="", accent=(46, 160, 255), title=None, lang="en", fill=False, **_):
     path = os.path.join(PHOTO_DIR or "", f"{mode}.jpg")
     if not mode or not os.path.exists(path):
         return G._bg(W, H).astype(np.uint8).copy()
-    im, bg = _photo(path, W, H)
     u = clamp(t / max(D, 0.1), 0, 1); s = _s(W)
+    if fill:  # AI illustration: edge to edge, slow push-in with a gentle drift (no letterbox)
+        im = _photo_full(path); ih, iw = im.shape[:2]
+        z = max(W / iw, H / ih) * (1.04 + 0.08 * ease_in_out(u))
+        rw, rh = max(W, int(iw * z)), max(H, int(ih * z))
+        big = cv2.resize(im, (rw, rh), interpolation=cv2.INTER_AREA if z < 1 else cv2.INTER_CUBIC)
+        x0 = int((rw - W) * (0.5 + 0.25 * (u - 0.5))); y0 = int((rh - H) * (0.45 + 0.1 * (u - 0.5)))
+        out = np.ascontiguousarray(big[max(0, y0):max(0, y0) + H, max(0, x0):max(0, x0) + W])
+        a = ease_out_cubic(u / 0.06)
+        return out if a >= 1 else (out * a + G._bg(W, H)[:out.shape[0], :out.shape[1]] * (1 - a)).astype(np.uint8)
+    im, bg = _photo(path, W, H)
     out = bg.copy()
     ih, iw = im.shape[:2]
     fit = min(W * 0.94 / iw, H * 0.90 / ih)

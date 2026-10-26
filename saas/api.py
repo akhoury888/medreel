@@ -54,7 +54,7 @@ def meta():
                     "captions": planner.CAPTION_STYLES, "music": planner.MUSIC_TRACKS, "assets": graphics.ASSET_INFO,
                     "brand_defaults": planner.DEFAULT_BRAND, "modes": pipeline.MODES,
                     "voices": {l: synth.available(l) for l in ("en", "fr", "ar")},
-                    "ai_scripts": bool(os.environ.get("ANTHROPIC_API_KEY")), "stock": _stock_credit(),
+                    "ai_scripts": bool(os.environ.get("ANTHROPIC_API_KEY")), "stock": _stock_credit(), "ai_images": bool(os.environ.get("FAL_KEY")),
                     "projects": [p.id for p in Session.scalars(select(Project).where(Project.user_id == current_user().id).order_by(Project.created_at.desc()).limit(20))]})
 
 
@@ -265,6 +265,42 @@ def add_stock(pid):
     res = commands.execute_ops(_plan_path(p), [op], label="Add stock video")
     jobs.enqueue(p, "preview", priority=_prio())
     return jsonify(res)
+
+
+@bp.post("/api/projects/<pid>/ai_image")
+@login_required
+def ai_image(pid):
+    """Generate an illustration for one sentence (Claude writes the brief unless the doctor typed one) and place it there.
+    replace=<scene id> swaps an existing AI image for a new one."""
+    from engine import imagegen, commands
+    p = _own(pid)
+    if _busy(p): abort(409, "Wait until the first edit is finished.")
+    if not imagegen.available(): abort(503, "AI illustrations need a fal.ai key (FAL_KEY).")
+    b = request.get_json(force=True, silent=True) or {}
+    plan = json.load(open(_plan_path(p)))
+    sents = plan["analysis"]["sentences"]
+    try: i = int(b.get("sentence"))
+    except (TypeError, ValueError): abort(400, "Choose a sentence.")
+    if not 0 <= i < len(sents): abort(400, "Choose a sentence.")
+    brief = (b.get("brief") or "").strip()[:500]
+    if not brief:
+        try: brief = imagegen.brief_for_sentence(sents[i]["text"], plan["branding"].get("specialty", ""))
+        except Exception: brief = None
+    if not brief:  # no Claude key: use the concept vocabulary
+        from engine import concepts as CO
+        hits = CO.find(plan["transcript"][sents[i]["i0"]: sents[i]["i1"] + 1])
+        if not hits: abort(400, "Describe the image you want in the box above (or add a Claude key so it can write the description for you).")
+        brief = imagegen.concept_brief(hits[0][1])
+    try:
+        photo = imagegen.generate(brief, p.dir, plan["branding"].get("image_style", "3d"), plan["branding"].get("primary", "#2EA0FF"))
+    except Exception as e:
+        abort(502, f"The image service didn't answer ({str(e)[:80]}). Try again.")
+    ops = []
+    if b.get("replace"): ops.append({"op": "delete_scene", "id": str(b["replace"])[:40]})
+    ops.append({"op": "add_photo", "photo": photo, "sentence": i, "fill": True, "caption": ""})
+    res = commands.execute_ops(_plan_path(p), ops, label="AI illustration")
+    jobs.enqueue(p, "preview", priority=_prio())
+    return jsonify({**res, "photo": photo, "brief": brief})
 
 
 @bp.post("/api/projects/<pid>/undo")

@@ -389,6 +389,7 @@ textarea.script{min-height:220px;line-height:1.6;resize:vertical}
         </div>
         <label class="f">Colours</label><div class="colors"><label class="small">Accent<br><input type="color" data-b="primary"></label><label class="small">Background<br><input type="color" data-b="secondary"></label></div>
         <label class="f">Logo</label><div class="logo-prev"><span id="logoState" class="muted small">No logo — your initials are used.</span><input type="file" id="logoFile" accept="image/png,image/jpeg"><button class="btn sm hide" id="logoDel" type="button">Remove logo</button></div>
+        <label class="f">Style of AI illustrations<select data-b="image_style"><option value="3d">3D medical (glossy, like hospital animations)</option><option value="flat">Flat illustration (clean infographic)</option><option value="photo">Photo-realistic</option></select></label>
         <label class="f">Disclaimer on the end card<input data-b="disclaimer" placeholder="Educational content — not individual medical advice."></label>
         <button class="btn red" id="saveProfile" style="margin-top:18px" type="button">Save branding</button>
       </section>
@@ -592,7 +593,7 @@ function setSt(t,p,m){$('#stT').textContent=t;$('#stBar').style.width=Math.round
 
 /* ---------- settings ---------- */
 async function settingsView(){mount('t-settings');META=META||await api('/api/meta');const b={...META.brand_defaults,...ME.brand};
-  $$('[data-b]').forEach(i=>{const v=b[i.dataset.b];i.value=v==null?'':v});
+  $$('[data-b]').forEach(i=>{const v=b[i.dataset.b];i.value=v==null?(i.tagName==='SELECT'?i.options[0].value:''):v});
   if(!ME.brand.name)$('[data-b=name]').value=ME.name;if(!ME.brand.specialty)$('[data-b=specialty]').value=ME.specialty;
   const hasLogo=!!ME.brand.logo;$('#logoState').textContent=hasLogo?'Logo uploaded.':'No logo — your initials are used.';$('#logoDel').classList.toggle('hide',!hasLogo);
   $('#dStyle').innerHTML=Object.entries(META.styles).map(([k,v])=>`<option value="${k}">${esc(v)}</option>`).join('');$('#dStyle').value=ME.default_style;$('#dLang').value=ME.default_language;

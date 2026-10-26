@@ -153,7 +153,7 @@ def change_password():
     return jsonify({"ok": True, "message": "Password changed. Other devices were signed out."})
 
 
-BRAND_KEYS = ("name", "specialty", "clinic", "website", "booking", "phone", "primary", "secondary", "disclaimer", "lower_third", "outro")
+BRAND_KEYS = ("name", "specialty", "clinic", "website", "booking", "phone", "primary", "secondary", "disclaimer", "lower_third", "outro", "image_style")
 
 
 @bp.put("/api/account/profile")
@@ -171,6 +171,7 @@ def profile():
             if k in b["brand"]:
                 v = b["brand"][k]
                 if k in ("primary", "secondary") and not re.fullmatch(r"#[0-9a-fA-F]{6}", str(v)): continue
+                if k == "image_style" and v not in ("3d", "flat", "photo"): continue
                 br[k] = v if isinstance(v, bool) else str(v)[:300]
         u.brand_json = json.dumps(br)
     Session.commit()

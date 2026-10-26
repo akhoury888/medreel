@@ -502,6 +502,7 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
                 fn = G.ASSETS[g["asset"]]
                 kw = {"title": g["title"]} if g.get("title") else {}
                 if g["asset"] == "photo" and scn.get("caption"): kw = {"title": scn["caption"]}
+                if g.get("fill"): kw["fill"] = True
                 gfx_img = fn(max(32, int(gw)), max(32, int(gh)), gt, gd, mode=g["mode"], accent=accent, lang=glang, **kw)
         doc_full = dw >= W * 0.99 and dh >= H * 0.99
         def draw_doc():
