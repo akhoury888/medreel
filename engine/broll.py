@@ -11,6 +11,32 @@ log = logging.getLogger("medreel.broll")
 API = "https://api.pexels.com/videos"
 PIXABAY = "https://pixabay.com/api/videos/"
 CLIP_RE = re.compile(r"p[xb]\d{1,12}")
+MUST = {"lungs": ["lung", "breath", "chest"], "breathing": ["breath", "inhal", "exhal"], "short_breath": ["breath", "tired", "stairs", "exhaust"],
+        "asthma": ["asthma", "inhaler"], "inhaler": ["inhaler", "asthma"], "cough": ["cough", "sick", "flu", "cold"],
+        "smoking": ["smok", "cigarette", "tobacco"], "shisha": ["hookah", "shisha", "narg", "smok"], "quit_smoking": ["cigarette", "smok", "tobacco"],
+        "oxygen": ["oxygen", "mask", "hospital", "patient"], "saturation": ["oximeter", "pulse", "finger", "oxygen"], "sleep_apnea": ["snor", "sleep", "bed"],
+        "xray": ["xray", "x-ray", "radiolog", "radiograph", "skeleton", "chest"], "allergy": ["allerg", "pollen", "sneez", "tissue", "flower"],
+        "virus": ["virus", "covid", "corona", "bacteri", "microb", "cell"], "vaccine": ["vaccin", "syringe", "inject", "needle"],
+        "blood_pressure": ["blood pressure", "pressure", "tonometer", "sphygmo", "cuff"], "medication": ["pill", "tablet", "medic", "drug", "capsule", "pharma"],
+        "blood_test": ["blood", "test tube", "laborator", "sample"], "lab": ["laborator", "test tube", "microscop", "scien"],
+        "ultrasound": ["ultrasound", "sonogra", "echo", "scan"], "surgery": ["surg", "operat", "hospital"], "hospital": ["hospital", "clinic", "medical", "doctor", "nurse"],
+        "emergency": ["ambulance", "emergenc", "siren", "paramedic"], "checkup": ["doctor", "patient", "medical", "stethoscope", "clinic"],
+        "headache": ["headache", "migraine", "pain", "stress"], "fever": ["fever", "thermometer", "sick", "temperature"], "fatigue": ["tired", "sleep", "fatigue", "exhaust"],
+        "exercise": ["exercis", "sport", "fitness", "run", "jog", "gym", "workout"], "walking": ["walk", "hik", "stroll"], "swimming": ["swim", "pool"],
+        "cycling": ["cycl", "bike", "bicycle"], "yoga": ["yoga", "stretch", "meditat"], "weight": ["scale", "weight", "diet", "fitness"],
+        "diet": ["vegetable", "fruit", "salad", "healthy", "food"], "fast_food": ["burger", "fries", "fast food", "junk", "pizza"], "water": ["water", "drink", "glass", "hydrat"],
+        "sleep": ["sleep", "bed", "rest"], "stress": ["stress", "anxi", "work", "tired", "worr"], "diabetes": ["diabet", "glucose", "insulin", "blood sugar"],
+        "back": ["back", "spine", "pain", "posture"], "skin": ["skin", "sunscreen", "cream", "derma"], "pregnancy": ["pregnan", "belly", "maternity"],
+        "elderly": ["elderly", "senior", "old", "grandp", "grandm", "retire"]}
+ANIMALS = ("dog", "cat", "puppy", "kitten", "pet", "animal", "horse", "bird", "cow", "sheep", "wildlife", "zoo")
+
+
+def _relevant(r, key):
+    tags = (r.get("tags") or "").lower().replace("-", "")
+    if any(re.search(rf"\b{a}s?\b", tags) for a in ANIMALS): return False
+    must = MUST.get(key)
+    if not must or not tags: return True  # Pexels gives no tags: trust its (better) relevance
+    return any(m.replace("-", "") in tags for m in must)
 
 
 def provider():
@@ -40,7 +66,7 @@ def _brief(v):  # Pexels video -> common shape
 def _brief_pb(h):  # Pixabay hit -> common shape
     vs = h.get("videos") or {}
     thumb = next((vs[k].get("thumbnail") for k in ("small", "medium", "tiny", "large") if (vs.get(k) or {}).get("thumbnail")), None)
-    return {"id": f"pb{h['id']}", "image": thumb, "duration": h.get("duration"), "user": h.get("user"), "url": h.get("pageURL"),
+    return {"id": f"pb{h['id']}", "image": thumb, "duration": h.get("duration"), "user": h.get("user"), "url": h.get("pageURL"), "tags": h.get("tags", ""),
             "_files": [{"link": f.get("url"), "width": f.get("width"), "height": f.get("height")} for f in vs.values() if f and f.get("url")]}
 
 
@@ -119,7 +145,7 @@ def auto(plan, project_dir, max_per_min=4, log_fn=None):
         key = next((it["key"] for it in g.get("items", []) if CO.stock_query(it["key"]) and it["key"] not in used), None)
         if not key: continue
         try:
-            res = search(CO.stock_query(key), per_page=6)
+            res = [r for r in search(CO.stock_query(key), per_page=15) if _relevant(r, key)]
             clip = next((c for c in (fetch(r, project_dir) for r in res[:2]) if c), None)
         except Exception as e:
             (log_fn or log.warning)(f"stock video unavailable ({e}); keeping icon cards"); return done

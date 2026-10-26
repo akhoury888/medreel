@@ -164,11 +164,20 @@ class Captions:
         for li, ln in enumerate(lines):
             lw = sum(widths[i] for i in ln) + space * (len(ln) - 1)
             x = (W_ - lw) / 2; y = pad + li * lh
-            x_ltr = x
+            if self.rtl:  # Arabic line: right-to-left, but a run of English words ("chest CT") keeps its own order
+                runs = []
+                for i in ln:
+                    latin = not K.is_ar(texts[i]) and bool(re.search(r"[A-Za-z0-9]", texts[i]))
+                    if runs and runs[-1][0] == latin: runs[-1][1].append(i)
+                    else: runs.append([latin, [i]])
+                order = [i for latin, ids in reversed(runs) for i in (ids if latin else reversed(ids))]
+            else:
+                order = ln
+            xpos, xx = {}, x
+            for i in order: xpos[i] = xx; xx += widths[i] + space
             for i in ln:
                 t, fo = texts[i], fonts[i]
-                x = (W_ - x_ltr - widths[i]) if self.rtl else x_ltr  # Arabic: first word on the right
-                x_ltr += widths[i] + space
+                x = xpos[i]
                 yy = y - (fo.size - f.size) * 0.6
                 is_kw = g["words"][i]["kw"]
                 if st == "pop":
