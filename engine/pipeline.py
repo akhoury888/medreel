@@ -51,7 +51,9 @@ def _stock(plan, d, p):
         p(0.76, "Creating medical illustrations…")
         try:
             n = imagegen.auto(plan, d)
-            if n: p(0.78, f"Added {n} illustration(s).")
+            if n:
+                p(0.78, f"Added {n} illustration(s). Animating the key ones (1–3 min)…")
+                imagegen.auto_animate(plan, d)
         except Exception:
             pass  # illustrations are a bonus: never fail a video because of them
     if not broll.available(): return

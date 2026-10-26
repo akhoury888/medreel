@@ -85,6 +85,14 @@ def run_job(j):
             p.language = plan.get("language", p.language)
             s.commit()
             kind, base = "preview", 0.5
+        elif j.kind == "animate":
+            from engine import imagegen, planner as P
+            prog(0.05, "Animating the illustration (1–3 minutes)…")
+            plan_path = os.path.join(p.dir, "plan.json")
+            plan = json.load(open(plan_path))
+            imagegen.animate_scene(plan, payload.get("scene"), p.dir)
+            P.save(plan, plan_path); payload["_animated"] = True
+            kind, base = "preview", 0.6
         else:
             kind, base = j.kind, 0.0
         plan_path = os.path.join(p.dir, "plan.json")
@@ -112,6 +120,7 @@ def run_job(j):
             if p: p.status = "error"
         elif p: p.status = "ready" if os.path.exists(os.path.join(p.dir, "plan.json")) else "error"
         friendly = str(e)[:300] if isinstance(e, (RuntimeError, ValueError)) else "Something went wrong while processing this video. Your credit was not used."
+        if j.kind == "animate" and not payload.get("_animated"): friendly = f"The animation could not be made ({str(e)[:120]}). The still illustration is kept."
         s.execute(update(Job).where(Job.id == j.id).values(state="error", message=friendly, finished_at=now()))
         s.commit()
     finally:

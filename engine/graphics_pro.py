@@ -640,7 +640,7 @@ def broll(W, H, t, D, mode="", **_):
     if r is None:
         cap = cv2.VideoCapture(path)
         r = _READERS[path] = {"cap": cap, "i": -1, "frame": None, "n": max(1, int(cap.get(cv2.CAP_PROP_FRAME_COUNT))), "fps": cap.get(cv2.CAP_PROP_FPS) or 30}
-    want = int(t * r["fps"]) % r["n"]
+    want = min(int(t * r["fps"]), r["n"] - 1)  # hold the last frame rather than jump back
     if want < r["i"]:  # scene restarted (or looped): rewind
         r["cap"].set(cv2.CAP_PROP_POS_FRAMES, 0); r["i"] = -1
     while r["i"] < want:

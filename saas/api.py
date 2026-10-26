@@ -303,6 +303,21 @@ def ai_image(pid):
     return jsonify({**res, "photo": photo, "brief": brief})
 
 
+@bp.post("/api/projects/<pid>/animate")
+@login_required
+def animate_scene(pid):
+    from engine import imagegen
+    p = _own(pid)
+    if _busy(p): abort(409, "Wait until the first edit is finished.")
+    if not imagegen.available(): abort(503, "Animations need a fal.ai key (FAL_KEY).")
+    sid = str((request.get_json(force=True, silent=True) or {}).get("scene") or "")[:40]
+    plan = json.load(open(_plan_path(p)))
+    sc = next((x for x in plan["scenes"] if x["id"] == sid), None)
+    if not sc or sc["graphic"]["asset"] != "photo" or not sc["graphic"].get("fill"): abort(400, "Only AI illustrations can be animated.")
+    jobs.enqueue(p, "animate", {"scene": sid}, priority=_prio())
+    return jsonify({"ok": True, "message": "Animating — this takes 1–3 minutes."})
+
+
 @bp.post("/api/projects/<pid>/undo")
 @login_required
 def undo(pid):
@@ -341,7 +356,7 @@ def media(pid, name):
     if name.startswith("source.") and "/" not in name: return send_from_directory(p.dir, name, conditional=True)
     m = re.fullmatch(r"photo_([0-9a-f]{12})\.jpg", name)
     if m: return send_from_directory(os.path.join(p.dir, "photos"), m.group(1) + ".jpg", conditional=True)
-    m = re.fullmatch(r"broll_(p[xb]\d{1,12})\.jpg", name)
+    m = re.fullmatch(r"broll_(p[xb]\d{1,12}|ai[0-9a-f]{12})\.jpg", name)
     if m: return send_from_directory(os.path.join(p.dir, "broll"), m.group(1) + ".jpg", conditional=True)
     if name not in allowed: abort(404)
     dl = request.args.get("dl") == "1"

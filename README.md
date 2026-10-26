@@ -17,7 +17,9 @@ Graphics (all original, procedural): CT scanner, cardiac CT calcium scoring with
 coronary tree, plaque/narrowing, plaque rupture and clot, balloon + stent, ECG, blood-pressure card, keyword pop-ups, and the
 doctor's own photos (clinic, team…). For every specialty: animated icon cards (692 medical icons from Health Icons, MIT)
 triggered by what the doctor says in Arabic/French/English (`engine/concepts.py`), and optional stock footage from Pixabay or Pexels
-(`PIXABAY_API_KEY` or `PEXELS_API_KEY`, both free) — added automatically and searchable in the studio's "Photos & videos" tab. Hesitations ("ااا", "euh", "um") are cut automatically; a soft music bed sits ~15 dB under the voice.
+(`PIXABAY_API_KEY` or `PEXELS_API_KEY`, both free). With `FAL_KEY` (+ `ANTHROPIC_API_KEY` for the briefs): AI medical
+illustrations (FLUX.2) in the doctor's style, and 5-second animations of them (Kling 2.6 Pro) — automatic for the key moments,
+and on demand in the studio (Generate / Regenerate / Animate). — added automatically and searchable in the studio's "Photos & videos" tab. Hesitations ("ااا", "euh", "um") are cut automatically; a soft music bed sits ~15 dB under the voice.
 
 After the first edit, the doctor reviews it in the **studio**: toggle cuts, fix the transcript, change layouts, add graphics or photos, ask for changes in
 plain language ("make the subtitles more dynamic"), check the flagged claims, then export 1080×1920 MP4 + .srt.

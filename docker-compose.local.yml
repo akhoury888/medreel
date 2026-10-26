@@ -25,6 +25,8 @@ services:
       PIXABAY_API_KEY: ${PIXABAY_API_KEY:-}
       # Optional, AI medical illustrations (fal.ai, ~$0.03 each): FAL_KEY=... in the same .env file
       FAL_KEY: ${FAL_KEY:-}
+      # How many illustrations each new video animates automatically (~$0.35 each). 0 = only when you press Animate.
+      MEDREEL_AI_ANIMATE: ${MEDREEL_AI_ANIMATE:-2}
     # one web process with one built-in render worker (keeps memory use reasonable on a laptop)
     command: sh -c "gunicorn -w 1 -k gthread --threads 8 --timeout 600 -b 0.0.0.0:8080 wsgi:app"
     volumes: [ "medreel-local-data:/data" ]

@@ -174,3 +174,96 @@ def auto(plan, project_dir, want=None, log_fn=None):
                              "layout": "split" if presenter else "full_graphic", "caption": ""})
         if msg.startswith("Added"): n += 1
     return n
+
+
+# ------------------------------------------------------------------ animation (image -> 5 s video)
+ANIM_MODEL = os.environ.get("MEDREEL_ANIM_MODEL", "fal-ai/kling-video/v2.6/pro/image-to-video")
+MOTION_RULES = ("Slow, smooth, cinematic medical-animation motion; the camera drifts or pushes in gently; the subject moves subtly and "
+                "naturally (e.g. lungs breathing, blood flowing, particles drifting); anatomy keeps its shape; no morphing, no new objects, "
+                "no text, no people appearing, no cuts.")
+
+
+def _fal_queue(model, payload, timeout=420):
+    """fal queue API: submit, poll, fetch — long video jobs don't hold one HTTP request open."""
+    import time
+    hdr = {"Authorization": f"Key {os.environ['FAL_KEY']}", "Content-Type": "application/json"}
+    try:
+        sub = json.loads(urllib.request.urlopen(urllib.request.Request(f"https://queue.fal.run/{model}", json.dumps(payload).encode(), hdr),
+                                                timeout=60).read())
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"animation service refused ({e.code})")
+    status_url = sub.get("status_url") or f"https://queue.fal.run/{model}/requests/{sub['request_id']}/status"
+    result_url = sub.get("response_url") or f"https://queue.fal.run/{model}/requests/{sub['request_id']}"
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        st = json.loads(urllib.request.urlopen(urllib.request.Request(status_url, headers=hdr), timeout=30).read())
+        if st.get("status") == "COMPLETED": break
+        if st.get("status") in ("FAILED", "ERROR", "CANCELLED"): raise RuntimeError("animation failed")
+        time.sleep(4)
+    else:
+        raise RuntimeError("animation took too long")
+    return json.loads(urllib.request.urlopen(urllib.request.Request(result_url, headers=hdr), timeout=60).read())
+
+
+def motion_prompt(brief):
+    txt = None
+    try:
+        txt = _claude(f"Write one sentence (max 40 words) describing how this medical illustration should come alive in a 5-second "
+                      f"clip. Illustration: \"{brief}\". {MOTION_RULES} Return ONLY the sentence.", max_tokens=150)
+    except Exception:
+        pass
+    return ((txt or "").strip().strip('"') or "Gentle cinematic push-in, subtle natural motion of the subject.") + " " + MOTION_RULES
+
+
+def animate(photo_id, project_dir):
+    """Turn an AI illustration (photos/<id>.jpg) into a 5 s clip -> clip id 'ai<id>' in broll/ (same format as stock clips)."""
+    import subprocess
+    src = os.path.join(project_dir, "photos", photo_id + ".jpg")
+    meta_p = os.path.join(project_dir, "photos", photo_id + ".json")
+    meta = json.load(open(meta_p)) if os.path.exists(meta_p) else {}
+    data_uri = "data:image/jpeg;base64," + base64.b64encode(open(src, "rb").read()).decode()
+    res = _fal_queue(ANIM_MODEL, {"prompt": motion_prompt(meta.get("brief", "a medical illustration")), "start_image_url": data_uri,
+                                  "duration": "5", "generate_audio": False, "negative_prompt": "blur, distortion, morphing anatomy, text, watermark, low quality"})
+    url = (res.get("video") or {}).get("url")
+    if not url: raise RuntimeError("no video returned")
+    d = os.path.join(project_dir, "broll"); os.makedirs(d, exist_ok=True)
+    clip = "ai" + photo_id
+    raw = os.path.join(d, clip + ".src.mp4")
+    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "MedReel/1.0"}), timeout=120) as r, open(raw, "wb") as fo:
+        fo.write(r.read(200 * 1024 * 1024))
+    out = os.path.join(d, clip + ".mp4")
+    vf = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30"
+    r = subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", raw, "-an", "-vf", vf, "-c:v", "libx264", "-preset", "veryfast", "-crf", "19",
+                        "-pix_fmt", "yuv420p", out], capture_output=True)
+    os.remove(raw)
+    if r.returncode or not os.path.exists(out): raise RuntimeError("could not read the animation")
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", "1", "-i", out, "-frames:v", "1", "-vf", "scale=240:-2", os.path.join(d, clip + ".jpg")])
+    json.dump({"source": "ai-animation", "photo": photo_id, "model": ANIM_MODEL}, open(os.path.join(d, clip + ".json"), "w"))
+    return clip
+
+
+def animate_scene(plan, scene_id, project_dir):
+    """Swap an AI-illustration scene for its animated version (keeps timing and layout)."""
+    sc = next((x for x in plan["scenes"] if x["id"] == scene_id), None)
+    if not sc or sc["graphic"]["asset"] != "photo" or not sc["graphic"].get("fill"): raise ValueError("Only AI illustrations can be animated.")
+    clip = animate(sc["graphic"]["mode"], project_dir)
+    sc["graphic"] = {"asset": "broll", "mode": clip, "label": "Animated illustration", "photo": sc["graphic"]["mode"], "animated": True}
+    return clip
+
+
+def auto_animate(plan, project_dir, n=None, log_fn=None):
+    """Animate the first few AI illustrations of a new video (cost-capped: MEDREEL_AI_ANIMATE, default 2)."""
+    n = int(os.environ.get("MEDREEL_AI_ANIMATE", "2")) if n is None else n
+    targets = [x["id"] for x in sorted(plan["scenes"], key=lambda x: x["start"]) if x["graphic"]["asset"] == "photo" and x["graphic"].get("fill")][:n]
+    if not targets: return 0
+    ok = 0
+    with cf.ThreadPoolExecutor(max_workers=2) as ex:
+        futs = {ex.submit(animate, next(x for x in plan["scenes"] if x["id"] == sid)["graphic"]["mode"], project_dir): sid for sid in targets}
+        for f in cf.as_completed(futs):
+            try:
+                clip = f.result(); sc = next(x for x in plan["scenes"] if x["id"] == futs[f])
+                sc["graphic"] = {"asset": "broll", "mode": clip, "label": "Animated illustration", "photo": sc["graphic"]["mode"], "animated": True}
+                ok += 1
+            except Exception as e:
+                (log_fn or log.warning)(f"animation failed ({e})")
+    return ok

@@ -11,6 +11,7 @@ log = logging.getLogger("medreel.broll")
 API = "https://api.pexels.com/videos"
 PIXABAY = "https://pixabay.com/api/videos/"
 CLIP_RE = re.compile(r"p[xb]\d{1,12}")
+ANY_CLIP_RE = re.compile(r"p[xb]\d{1,12}|ai[0-9a-f]{12}")
 MUST = {"lungs": ["lung", "breath", "chest"], "breathing": ["breath", "inhal", "exhal"], "short_breath": ["breath", "tired", "stairs", "exhaust"],
         "asthma": ["asthma", "inhaler"], "inhaler": ["inhaler", "asthma"], "cough": ["cough", "sick", "flu", "cold"],
         "smoking": ["smok", "cigarette", "tobacco"], "shisha": ["hookah", "shisha", "narg", "smok"], "quit_smoking": ["cigarette", "smok", "tobacco"],
