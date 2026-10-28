@@ -3,14 +3,12 @@
 # Test mode: choosing a plan activates it instantly without charging; password-reset links show on screen.
 services:
   medreel:
-    build:
-      context: .
-      args:
-        WITH_LARGE: "1"   # include the large speech model: much better Arabic (slower)
+    build: .
     image: medreel-local
     ports: [ "8080:8080" ]
     environment:
       MEDREEL_DEV: "1"
+      WITH_LARGE: "1"   # also download the large speech model (better offline Arabic) — once, into the models volume
       PUBLIC_URL: http://localhost:8080
       DATABASE_URL: sqlite:////data/medreel.db
       WORKER_INLINE: "1"
@@ -29,6 +27,7 @@ services:
       MEDREEL_AI_ANIMATE: ${MEDREEL_AI_ANIMATE:-2}
     # one web process with one built-in render worker (keeps memory use reasonable on a laptop)
     command: sh -c "gunicorn -w 1 -k gthread --threads 8 --timeout 600 -b 0.0.0.0:8080 wsgi:app"
-    volumes: [ "medreel-local-data:/data" ]
+    volumes: [ "medreel-local-data:/data", "medreel-models:/models" ]   # models kept across updates
 volumes:
   medreel-local-data: {}
+  medreel-models: {}

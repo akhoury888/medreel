@@ -29,7 +29,7 @@ Install Docker Desktop, download this repository, open a terminal in its folder 
 ```bash
 docker compose -f docker-compose.local.yml up --build
 ```
-The first start downloads ~2 GB of models (15–30 min). Then open http://localhost:8080.
+The first start downloads the speech/voice models (~2–4 GB) into a Docker volume — once; later updates and rebuilds reuse them. Then open http://localhost:8080.
 Test mode: choosing a plan activates it without payment. Stop with Ctrl+C; your videos are kept for next time.
 
 ## Run it locally without Docker (test mode — no Stripe needed)
