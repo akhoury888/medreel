@@ -95,7 +95,7 @@ def run_job(j):
             prog(0.05, "Animating the illustration (1–3 minutes)…")
             plan_path = os.path.join(p.dir, "plan.json")
             plan = json.load(open(plan_path))
-            imagegen.animate_scene(plan, payload.get("scene"), p.dir)
+            imagegen.animate_scene(plan, payload.get("scene"), p.dir, on_status=lambda m: prog(0.1, f"Animating the illustration — {m}"))
             P.save(plan, plan_path); payload["_animated"] = True
             kind, base = "preview", 0.6
         else:

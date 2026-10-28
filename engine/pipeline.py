@@ -45,6 +45,10 @@ def analyze_and_plan(d, src, style="modern_educational", branding=None, log=prin
     return plan
 
 
+import logging
+_plog = logging.getLogger("medreel.pipeline")
+
+
 def _stock(plan, d, p, ai_budget=None):
     """ai_budget (from the account's AI credits): {"credits", "image", "animation", "max_images", "max_animations"};
     None = no limit (local/CLI use). What was actually made is recorded in plan["ai_usage"] for billing."""
@@ -52,17 +56,22 @@ def _stock(plan, d, p, ai_budget=None):
     plan["ai_usage"] = {"image": 0, "animation": 0}
     if imagegen.available() and (ai_budget is None or ai_budget["credits"] >= ai_budget["image"]):
         p(0.76, "Creating medical illustrations…")
+        import time as _t0; t_img = _t0.time()
         try:
             b = ai_budget
             cap = None if b is None else max(0, min(b["max_images"], b["credits"] // b["image"]))
             n = imagegen.auto(plan, d, cap=cap) if cap != 0 else 0
             plan["ai_usage"]["image"] = n
+            _plog.info("illustrations: %d in %.0fs", n, _t0.time() - t_img)
             left = None if b is None else b["credits"] - n * b["image"]
             k_cap = None if b is None else max(0, min(b["max_animations"], left // b["animation"]))
             if n and k_cap != 0:
                 p(0.78, f"Added {n} illustration(s). Animating the key ones (1–3 min)…")
                 env_n = int(os.environ.get("MEDREEL_AI_ANIMATE", "2"))
-                plan["ai_usage"]["animation"] = imagegen.auto_animate(plan, d, n=env_n if k_cap is None else min(env_n, k_cap))
+                import time as _t; t0 = _t.time()
+                plan["ai_usage"]["animation"] = imagegen.auto_animate(plan, d, n=env_n if k_cap is None else min(env_n, k_cap),
+                                                                      on_status=lambda m: p(0.79, f"Animating illustrations — {m}"))
+                _plog.info("animations: %d in %.0fs", plan["ai_usage"]["animation"], _t.time() - t0)
         except Exception:
             pass  # illustrations are a bonus: never fail a video because of them
     if not broll.available(): return

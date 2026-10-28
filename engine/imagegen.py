@@ -185,8 +185,9 @@ MOTION_RULES = ("Slow, smooth, cinematic medical-animation motion; the camera dr
                 "no text, no people appearing, no cuts.")
 
 
-def _fal_queue(model, payload, timeout=420):
-    """fal queue API: submit, poll, fetch — long video jobs don't hold one HTTP request open."""
+def _fal_queue(model, payload, timeout=420, on_status=None):
+    """fal queue API: submit, poll, fetch — long video jobs don't hold one HTTP request open.
+    on_status(text) reports where the job is (waiting in fal's line / being made) so the doctor sees why it takes time."""
     import time
     hdr = {"Authorization": f"Key {os.environ['FAL_KEY']}", "Content-Type": "application/json"}
     try:
@@ -199,7 +200,15 @@ def _fal_queue(model, payload, timeout=420):
     t0 = time.time()
     while time.time() - t0 < timeout:
         st = json.loads(urllib.request.urlopen(urllib.request.Request(status_url, headers=hdr), timeout=30).read())
-        if st.get("status") == "COMPLETED": break
+        el = int(time.time() - t0)
+        if on_status:
+            if st.get("status") == "IN_QUEUE":
+                pos = st.get("queue_position")
+                on_status(f"fal.ai: waiting in line{f' (position {pos + 1})' if isinstance(pos, int) else ''} · {el}s")
+            elif st.get("status") == "IN_PROGRESS":
+                on_status(f"fal.ai is animating · {el}s")
+        if st.get("status") == "COMPLETED":
+            log.info("fal %s done in %ss", model, el); break
         if st.get("status") in ("FAILED", "ERROR", "CANCELLED"): raise RuntimeError("animation failed")
         time.sleep(4)
     else:
@@ -217,7 +226,7 @@ def motion_prompt(brief):
     return ((txt or "").strip().strip('"') or "Gentle cinematic push-in, subtle natural motion of the subject.") + " " + MOTION_RULES
 
 
-def animate(photo_id, project_dir):
+def animate(photo_id, project_dir, on_status=None):
     """Turn an AI illustration (photos/<id>.jpg) into a 5 s clip -> clip id 'ai<id>' in broll/ (same format as stock clips)."""
     import subprocess
     src = os.path.join(project_dir, "photos", photo_id + ".jpg")
@@ -225,7 +234,8 @@ def animate(photo_id, project_dir):
     meta = json.load(open(meta_p)) if os.path.exists(meta_p) else {}
     data_uri = "data:image/jpeg;base64," + base64.b64encode(open(src, "rb").read()).decode()
     res = _fal_queue(ANIM_MODEL, {"prompt": motion_prompt(meta.get("brief", "a medical illustration")), "start_image_url": data_uri,
-                                  "duration": "5", "generate_audio": False, "negative_prompt": "blur, distortion, morphing anatomy, text, watermark, low quality"})
+                                  "duration": "5", "generate_audio": False, "negative_prompt": "blur, distortion, morphing anatomy, text, watermark, low quality"},
+                     on_status=on_status)
     url = (res.get("video") or {}).get("url")
     if not url: raise RuntimeError("no video returned")
     d = os.path.join(project_dir, "broll"); os.makedirs(d, exist_ok=True)
@@ -244,23 +254,23 @@ def animate(photo_id, project_dir):
     return clip
 
 
-def animate_scene(plan, scene_id, project_dir):
+def animate_scene(plan, scene_id, project_dir, on_status=None):
     """Swap an AI-illustration scene for its animated version (keeps timing and layout)."""
     sc = next((x for x in plan["scenes"] if x["id"] == scene_id), None)
     if not sc or sc["graphic"]["asset"] != "photo" or not sc["graphic"].get("fill"): raise ValueError("Only AI illustrations can be animated.")
-    clip = animate(sc["graphic"]["mode"], project_dir)
+    clip = animate(sc["graphic"]["mode"], project_dir, on_status)
     sc["graphic"] = {"asset": "broll", "mode": clip, "label": "Animated illustration", "photo": sc["graphic"]["mode"], "animated": True}
     return clip
 
 
-def auto_animate(plan, project_dir, n=None, log_fn=None):
+def auto_animate(plan, project_dir, n=None, log_fn=None, on_status=None):
     """Animate the first few AI illustrations of a new video (cost-capped: MEDREEL_AI_ANIMATE, default 2)."""
     n = int(os.environ.get("MEDREEL_AI_ANIMATE", "2")) if n is None else n
     targets = [x["id"] for x in sorted(plan["scenes"], key=lambda x: x["start"]) if x["graphic"]["asset"] == "photo" and x["graphic"].get("fill")][:n]
     if not targets: return 0
     ok = 0
     with cf.ThreadPoolExecutor(max_workers=2) as ex:
-        futs = {ex.submit(animate, next(x for x in plan["scenes"] if x["id"] == sid)["graphic"]["mode"], project_dir): sid for sid in targets}
+        futs = {ex.submit(animate, next(x for x in plan["scenes"] if x["id"] == sid)["graphic"]["mode"], project_dir, on_status): sid for sid in targets}
         for f in cf.as_completed(futs):
             try:
                 clip = f.result(); sc = next(x for x in plan["scenes"] if x["id"] == futs[f])
