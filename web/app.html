@@ -505,6 +505,7 @@ async function newView(){
   mount('t-new');N={mode:'auto_edit',style:ME.default_style,file:null,take:null,rec:null,stream:null};
   META=META||await api('/api/meta');
   const left=ME.usage.limit-ME.usage.used;
+  if(window.META_MODELS_PENDING===undefined){api('/api/meta').then(m=>{if(!m.models_ready){$('#newQuota').insertAdjacentHTML('beforebegin','<div class="mini" style="margin-bottom:8px;padding:10px;border:1px solid var(--line);border-radius:10px">⏳ First start: the speech models are still downloading (about 4 GB, once). You can upload now — your video will start processing automatically when the download finishes.</div>')}}).catch(()=>{});window.META_MODELS_PENDING=1}
   $('#newQuota').innerHTML=left>0?`${left} of ${ME.usage.limit} videos left this month.`:`You've used all ${ME.usage.limit} videos this month. <a href="#/billing">Upgrade your plan</a> to make more.`;
   $('#nLang').value=ME.default_language||'auto';
   $('#nStyles').innerHTML=Object.entries(META.styles).map(([k,v])=>`<button type="button" class="chip" data-style="${k}" aria-pressed="${k===N.style}">${esc(v)}</button>`).join('');

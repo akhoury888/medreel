@@ -134,9 +134,16 @@ def run_job(j):
         Session.remove()
 
 
+def models_ready():
+    """In Docker the speech models download in the background on first start (tools/entrypoint.sh)."""
+    return os.environ.get("MEDREEL_WAIT_MODELS") != "1" or os.path.exists(os.path.join(os.environ.get("MEDREEL_MODELS", "/models"), ".ready"))
+
+
 def worker_loop(stop=None, idle=1.5):
     wid = f"{socket.gethostname()}:{os.getpid()}:{threading.get_ident() % 10000}"
     log.info("worker %s started", wid)
+    while not models_ready() and not (stop and stop.is_set()):
+        log.info("waiting for the speech models to finish downloading (first start only)…"); time.sleep(20)
     while not (stop and stop.is_set()):
         try:
             j = _claim(wid)
