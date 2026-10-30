@@ -23,7 +23,7 @@ def ingest(root, src_path, pid=None):
     return pid, d, dst
 
 
-def analyze_and_plan(d, src, style="modern_educational", branding=None, log=print, progress=None, language="auto", title=None, ai_budget=None):
+def analyze_and_plan(d, src, style="modern_educational", branding=None, log=print, progress=None, language="auto", title=None, ai_budget=None, visuals=None):
     def p(x, msg):
         log(msg)
         if progress: progress(x, msg)
@@ -38,7 +38,7 @@ def analyze_and_plan(d, src, style="modern_educational", branding=None, log=prin
     plan = P.build_plan(src, backend, words, an, style=style, branding=branding, language=lang)
     if title and len(title) <= 60:  # the doctor's own title beats a sentence picked from the transcript
         plan["title"].update({"text": title, "enabled": True})
-    _stock(plan, d, p, ai_budget)
+    _stock(plan, d, p, ai_budget, visuals)
     plan["mode"] = "auto_edit"
     P.save(plan, os.path.join(d, "plan.json"), history=False)
     p(0.8, "Plan ready.")
@@ -49,12 +49,44 @@ import logging
 _plog = logging.getLogger("medreel.pipeline")
 
 
-def _stock(plan, d, p, ai_budget=None):
-    """ai_budget (from the account's AI credits): {"credits", "image", "animation", "max_images", "max_animations"};
-    None = no limit (local/CLI use). What was actually made is recorded in plan["ai_usage"] for billing."""
+def _place_own_photos(plan, photos):
+    """Spread the doctor's own photos over the video: one per sentence that has no medical animation,
+    evenly spaced, replacing icon cards there. Free (no AI credits)."""
+    from . import commands as C
+    if not photos: return 0
+    presenter = plan.get("presenter", True)
+    sents = plan["analysis"]["sentences"]
+    busy = [(s["start"], s["end"]) for s in plan["scenes"] if s["graphic"]["asset"] not in ("icons",)]
+    free = [i for i, s in enumerate(sents) if s["end"] - s["start"] >= 1.5 and s["start"] > (4.0 if presenter else 3.0)
+            and not any(a < s["end"] - 0.3 and b > s["start"] + 0.3 for a, b in busy)]
+    if not free: return 0
+    n = min(len(photos), len(free))
+    picks = [free[round(k * (len(free) - 1) / max(1, n - 1))] if n > 1 else free[len(free) // 2] for k in range(n)]
+    done = 0
+    for pid, i in zip(photos, dict.fromkeys(picks)):
+        s = sents[i]
+        plan["scenes"] = [x for x in plan["scenes"] if not (x["graphic"]["asset"] == "icons" and x["start"] < s["end"] and x["end"] > s["start"])]
+        if C.apply(plan, {"op": "add_photo", "photo": pid, "sentence": i, "layout": "split" if presenter else "full_graphic"}).startswith("Added"): done += 1
+    return done
+
+
+def _stock(plan, d, p, ai_budget=None, visuals=None):
+    """Visuals for the gaps between medical animations, as the doctor chose them for this video:
+      mode 'ai'    — AI illustrations (+ animations), paid from AI credits (ai_budget; None = no limit, local/CLI)
+      mode 'own'   — the doctor's own photos (visuals['photos']), free
+      mode 'basic' — only the free medical animations and icon cards
+      stock=True   — also free stock footage (Pixabay/Pexels) for icon cards that are left (never by default)
+    What was actually made is recorded in plan["ai_usage"] for billing."""
     from . import broll, imagegen
+    v = visuals or {}
+    mode = v.get("mode") or ("ai" if imagegen.available() else "basic")
+    plan["visuals"] = {"mode": mode, "stock": bool(v.get("stock"))}
     plan["ai_usage"] = {"image": 0, "animation": 0}
-    if imagegen.available() and (ai_budget is None or ai_budget["credits"] >= ai_budget["image"]):
+    if mode == "own":
+        p(0.76, "Placing your photos…")
+        try: _place_own_photos(plan, v.get("photos") or [])
+        except Exception: _plog.exception("own photos")
+    if mode == "ai" and imagegen.available() and (ai_budget is None or ai_budget["credits"] >= ai_budget["image"]):
         p(0.76, "Creating medical illustrations…")
         import time as _t0; t_img = _t0.time()
         try:
@@ -65,16 +97,16 @@ def _stock(plan, d, p, ai_budget=None):
             _plog.info("illustrations: %d in %.0fs", n, _t0.time() - t_img)
             left = None if b is None else b["credits"] - n * b["image"]
             k_cap = None if b is None else max(0, min(b["max_animations"], left // b["animation"]))
-            if n and k_cap != 0:
+            env_n = int(v.get("animations", os.environ.get("MEDREEL_AI_ANIMATE", "2")))
+            if n and k_cap != 0 and env_n > 0:
                 p(0.78, f"Added {n} illustration(s). Animating the key ones (1–3 min)…")
-                env_n = int(os.environ.get("MEDREEL_AI_ANIMATE", "2"))
                 import time as _t; t0 = _t.time()
                 plan["ai_usage"]["animation"] = imagegen.auto_animate(plan, d, n=env_n if k_cap is None else min(env_n, k_cap),
                                                                       on_status=lambda m: p(0.79, f"Animating illustrations — {m}"))
                 _plog.info("animations: %d in %.0fs", plan["ai_usage"]["animation"], _t.time() - t0)
         except Exception:
             pass  # illustrations are a bonus: never fail a video because of them
-    if not broll.available(): return
+    if not (v.get("stock") and broll.available()): return
     p(0.78, "Adding stock footage…")
     try:
         n = broll.auto(plan, d)
@@ -89,14 +121,14 @@ MODES = {"auto_edit": "Upload a recording — AI edits everything",
          "ai_voice": "Prompt or script → video with AI narration (no recording)"}
 
 
-def create(d, mode, src=None, script=None, style="modern_educational", branding=None, language="auto", log=print, progress=None, title=None, ai_budget=None):
+def create(d, mode, src=None, script=None, style="modern_educational", branding=None, language="auto", log=print, progress=None, title=None, ai_budget=None, visuals=None):
     """Single entry point for all creation modes. Returns the plan (also saved to plan.json)."""
     from . import script_align, synth
     def p(x, msg):
         log(msg)
         if progress: progress(x, msg)
     if mode == "auto_edit" or (mode in ("own_script", "teleprompter") and not (script or "").strip()):
-        return analyze_and_plan(d, src, style, branding, log, progress, language, title, ai_budget)
+        return analyze_and_plan(d, src, style, branding, log, progress, language, title, ai_budget, visuals)
     lang = language if language in ("en", "fr", "ar") else script_align.detect_script_language(script)
     if mode == "ai_voice":
         if not synth.available(lang): raise RuntimeError(f"No AI voice installed for '{lang}'. Run tools/setup_models.sh.")
@@ -129,7 +161,7 @@ def create(d, mode, src=None, script=None, style="modern_educational", branding=
             plan["analysis"]["qa"]["issues"].append({"area": "script", "level": "warn",
                 "msg": "The recording doesn't follow the script closely — check caption timing, or switch to automatic captions."})
     if title and len(title) <= 60: plan["title"].update({"text": title, "enabled": True})
-    _stock(plan, d, p, ai_budget)
+    _stock(plan, d, p, ai_budget, visuals)
     plan["mode"] = mode
     P.save(plan, os.path.join(d, "plan.json"), history=False)
     p(0.8, "Plan ready.")

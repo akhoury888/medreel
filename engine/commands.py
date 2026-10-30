@@ -17,7 +17,7 @@ OPS_SCHEMA = {
     "set_music": {"track": P.MUSIC_TRACKS + ["next", "off", "on"]}, "music_volume": {"delta_db": "int"},
     "zoom": {"delta": "float"}, "caption_mode": {"mode": "original|translated|both", "target": "en|fr|ar"},
     "translate_captions": {"target": "en|fr|ar"}, "set_translation": {"i": "sentence index", "text": "str"}, "set_title": {"text": "str"}, "title_enabled": {"enabled": "bool"}, "undo": {},
-    "add_broll": {"clip": "id", "sentence": "int?"}, "image_style": {"style": "3d|flat|photo"}, "add_photo": {"photo": "id", "sentence": "int?", "phrase": "str?", "t_out": "sec?", "caption": "str?"}, "delete_scene": {"id": "str"},
+    "add_broll": {"clip": "id", "sentence": "int?"}, "image_style": {"style": "3d|flat|photo"}, "add_photo": {"photo": "id", "sentence": "int?", "phrase": "str?", "t_out": "sec?", "caption": "str?"}, "delete_scene": {"id": "str"}, "scene_time": {"id": "str", "start_out": "sec", "end_out": "sec"}, "set_effects": {"transitions": "bool?", "sfx": "bool?"},
 }
 
 ASSET_WORDS = [("coronary/stent", r"stent|angioplast|balloon"), ("coronary/occlusion", r"clot|heart attack|infarct|ruptur|occlu"),
@@ -176,6 +176,28 @@ def _edit_sentence(plan, si, text):
     return f"Line {si + 1} corrected."
 
 
+def _paid(sc):
+    g = sc.get("graphic", {})
+    return bool(g.get("fill") or g.get("animated") or (g.get("asset") == "photo"))
+
+
+def _make_room(scenes, a, b, keep_icons=False):
+    """Clear [a, b] on the visuals track: neighbours are trimmed when enough of them is left (>= 0.8 s); one that is
+    fully covered is removed — unless it's an AI image/animation or the doctor's photo, which is hidden (kept on the
+    timeline, dimmed) so paid or personal content is never lost by a drag."""
+    out = []
+    for x in scenes:
+        ov = min(x["end"], b) - max(x["start"], a)
+        if ov <= 0: out.append(x); continue
+        if x.get("layout") == "overlay" or x.get("graphic", {}).get("asset") == "icons":
+            if keep_icons: out.append(x)
+            continue  # icon cards give way to a real visual
+        if x["start"] < a and a - x["start"] >= 0.8: x["end"] = round(a - 0.02, 3); out.append(x)
+        elif x["end"] > b and x["end"] - b >= 0.8: x["start"] = round(b + 0.02, 3); out.append(x)
+        elif _paid(x): x["enabled"] = False; out.append(x)
+    return out
+
+
 def apply(plan, op):
     o = op["op"]; tl = P.Timeline(P.keep_segments(plan))
     if o == "set_style":
@@ -252,19 +274,12 @@ def apply(plan, op):
             s = _sentence_of(plan, i); a, b = s["start"] - 0.1, s["end"] + 0.3
         else:
             a, _ = tl.to_src(float(op.get("t_out") or 0)); b = a + 5
-        if b - a < 4.5: b = a + 4.5
-        if asset in ("photo", "broll"): b = min(max(b, a + (4.0 if asset == "photo" else 3.5)), a + (7.0 if asset == "photo" else 6.0))
+            if op.get("dur"): b = a + max(1.0, min(20.0, float(op["dur"])))
+        if b - a < 4.5 and not op.get("dur"): b = a + 4.5
+        if asset in ("photo", "broll") and not op.get("dur"): b = min(max(b, a + (4.0 if asset == "photo" else 3.5)), a + (7.0 if asset == "photo" else 6.0))
         default_layout = "split" if asset == "photo" else "pip" if asset == "broll" else {"stent": "pip", "occlusion": "split", "narrowing": "side", "sinus": "side", "gauge": "labels", "calcium": "split",
                           "scanner": "split", "coronaries": "split"}.get(mode, "split")
-        kept = []
-        for x in plan["scenes"]:
-            ov = min(x["end"], b) - max(x["start"], a)
-            if ov <= 0: kept.append(x)
-            elif ov < 0.8:  # touching neighbour: trim it instead of deleting it
-                if x["start"] < a: x["end"] = round(a - 0.05, 3)
-                else: x["start"] = round(b + 0.05, 3)
-                kept.append(x)
-        plan["scenes"] = kept
+        plan["scenes"] = _make_room(plan["scenes"], a, b)
         plan["scenes"].append({"id": f"scn_{uuid.uuid4().hex[:6]}", "start": round(a, 3), "end": round(b, 3), "layout": op.get("layout") or default_layout,
                                "graphic": {"asset": asset, "mode": mode, "label": "Photo" if asset == "photo" else "Stock video" if asset == "broll" else op["asset"]}, "text": s["text"] if s else "",
                                "auto": False, "enabled": True, **({"caption": str(op.get("caption") or "")[:80]} if asset == "photo" else {})})
@@ -327,11 +342,29 @@ def apply(plan, op):
         return _edit_sentence(plan, int(op["i"]), op["text"])
     if o == "delete_word":
         plan["transcript"][int(op["i"])]["deleted"] = bool(op.get("deleted", True)); return "Caption word hidden."
+    if o == "set_effects":
+        plan.setdefault("effects", {"transitions": True, "sfx": True}).update({k: bool(v) for k, v in op.items() if k in ("transitions", "sfx")})
+        return "Effects updated."
+    if o == "scene_time":  # storyboard drag/resize, in edited-video (output) seconds
+        x = next((y for y in plan["scenes"] if y["id"] == op.get("id")), None)
+        if not x: return "Scene not found."
+        a_out, b_out = float(op["start_out"]), float(op["end_out"])
+        a_out = max(0.0, min(a_out, tl.duration - 0.5)); b_out = max(a_out + 0.8, min(b_out, tl.duration))
+        a, _ = tl.to_src(a_out); b, _ = tl.to_src(b_out - 1e-3)
+        x["start"], x["end"] = round(a, 3), round(b, 3)
+        if x.get("layout") != "overlay":  # visuals on the same track can't overlap: trim the neighbours
+            others = _make_room([y for y in plan["scenes"] if y is not x], x["start"], x["end"], keep_icons=True)
+            plan["scenes"] = others + [x]
+        plan["scenes"].sort(key=lambda y: y["start"])
+        return f"Moved to {a_out:.1f}–{b_out:.1f}s."
     if o == "scene_update":
         for x in plan["scenes"]:
             if x["id"] == op["id"]:
                 for k in ("layout", "enabled"):
                     if k in op: x[k] = op[k]
+                if op.get("enabled") and x.get("layout") != "overlay":  # shown again: make room for it
+                    plan["scenes"] = _make_room([y for y in plan["scenes"] if y is not x], x["start"], x["end"], keep_icons=True) + [x]
+                    plan["scenes"].sort(key=lambda y: y["start"])
                 return f"Scene updated ({x['layout']}{'' if x.get('enabled', True) else ', disabled'})."
         return "Scene not found."
     if o == "set_branding":

@@ -155,6 +155,7 @@ def build_plan(source_path, asr_backend, words, analysis, style="modern_educatio
         "title": {"text": analysis["hook"], "enabled": bool(analysis["hook"]), "style": st["title"]},
         "music": {"track": st["music"], "enabled": True, "db": st["music_db"]},
         "audio": {"denoise": True, "loudnorm": -14, "highpass": 80},
+        "effects": {"transitions": True, "sfx": True},
         "grade": st["grade"],
         "output": {"width": 1080, "height": 1920, "fps": 30},
     }

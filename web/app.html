@@ -134,6 +134,9 @@ label.f .hint{display:block;font-weight:400;color:var(--steel);font-size:13px;ma
 .opt svg{width:40px;height:40px}
 .opt b{font-family:var(--display);font-size:19px;line-height:1.15}
 .opt span{font-size:14px;color:var(--steel)}
+.choose.vis{grid-template-columns:repeat(3,1fr)}.vcost{font-style:normal;font-size:12px;font-weight:700;color:var(--red,#C8233A)}
+.phlist{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.phlist div{position:relative}.phlist img{width:70px;height:70px;object-fit:cover;border-radius:10px;display:block}
+.phlist button{position:absolute;top:-6px;right:-6px;border:0;background:#1B2438;color:#fff;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:12px;line-height:20px;padding:0}
 .panel{background:var(--white);border:1.5px solid var(--line);border-radius:18px;padding:24px;margin-top:20px}
 .panel>h3{margin-bottom:14px}
 input[type=range]{accent-color:var(--ink);width:100%}
@@ -368,6 +371,24 @@ textarea.script{min-height:220px;line-height:1.6;resize:vertical}
     </div>
   </div>
 
+  <div class="panel" id="pVis">
+    <h3>Pictures in your video</h3>
+    <p class="muted small" style="margin:4px 0 12px">Built-in medical animations are always included where they fit. What should fill the other moments?</p>
+    <div class="choose vis" id="visOpts" role="group" aria-label="Pictures">
+      <button class="opt" type="button" data-vis="ai" aria-pressed="false"><b>✨ AI illustrations</b><span>Created from what you say, the key ones animated. Uses AI credits.</span><em class="vcost" id="visAiCost"></em></button>
+      <button class="opt" type="button" data-vis="own" aria-pressed="false"><b>📷 My own photos</b><span>Clinic, team, equipment… placed through the video. <strong>Free — no credits.</strong></span></button>
+      <button class="opt" type="button" data-vis="basic" aria-pressed="false"><b>🫀 Animations & icons only</b><span>Built-in medical animations and icon cards. Free.</span></button>
+    </div>
+    <div class="hide" id="ownBox" style="margin-top:12px">
+      <div class="drop" id="phDrop" tabindex="0" role="button"><b>Drop photos here, or click to choose</b><div class="muted small">JPG, PNG or WebP · up to 20 · never a patient without written consent</div></div>
+      <input type="file" id="phFiles" accept="image/jpeg,image/png,image/webp" multiple hidden>
+      <div id="phList" class="phlist"></div>
+    </div>
+    <div class="hide" id="aiOpts" style="margin-top:12px"><label class="f" style="margin-top:0">Animate the best illustrations<select id="vAnim"><option value="0">None (still images only)</option><option value="1">1 animation</option><option value="2" selected>2 animations</option><option value="3">3 animations</option></select></label></div>
+    <label class="small hide" id="stockLine" style="display:block;margin-top:12px"><input type="checkbox" id="vStock"> Also use free stock videos for the remaining moments</label>
+    <p class="muted small" style="margin-top:10px">You can change everything afterwards in the storyboard — drag photos, AI images and animations where you want them.</p>
+  </div>
+
   <div class="notice hide" id="aiNote">Narration uses a generic AI voice (male in English and Arabic, female in French), never a copy of your voice. The end card says “AI voice”, which Instagram and TikTok expect for synthetic audio.</div>
   <div class="err hide" id="newErr"></div>
   <div style="display:flex;gap:12px;align-items:center;margin-top:22px;flex-wrap:wrap"><button class="btn red" id="makeBtn" type="button">Make my video</button><span class="muted small">Your original recording is never modified.</span></div>
@@ -502,8 +523,15 @@ async function loadVids(){
 /* ---------- new video ---------- */
 let N={mode:'auto_edit',style:null,file:null,take:null,rec:null,stream:null};
 async function newView(){
-  mount('t-new');N={mode:'auto_edit',style:ME.default_style,file:null,take:null,rec:null,stream:null};
+  mount('t-new');N={mode:'auto_edit',style:ME.default_style,file:null,take:null,rec:null,stream:null,vis:null,photos:[]};
   META=META||await api('/api/meta');
+  setVis(META.ai_images&&(!ME.ai||ME.ai.left>0)?'ai':'basic');
+  if(ME.ai&&META.ai_images)$('#visAiCost').textContent=`${ME.ai.left} AI credits left this month`;
+  if(!META.ai_images){const b=$('[data-vis=ai]');b.disabled=true;b.style.opacity=.5;$('#visAiCost').textContent='Not set up on this server'}
+  $('#stockLine').classList.toggle('hide',!META.stock);
+  $$('#visOpts .opt').forEach(o=>o.onclick=()=>{if(!o.disabled)setVis(o.dataset.vis)});
+  const pd=$('#phDrop');pd.onclick=()=>$('#phFiles').click();pd.ondragover=e=>{e.preventDefault();pd.classList.add('on')};pd.ondragleave=()=>pd.classList.remove('on');
+  pd.ondrop=e=>{e.preventDefault();pd.classList.remove('on');addOwn([...e.dataTransfer.files])};$('#phFiles').onchange=e=>addOwn([...e.target.files]);
   const left=ME.usage.limit-ME.usage.used;
   if(window.META_MODELS_PENDING===undefined){api('/api/meta').then(m=>{if(!m.models_ready){$('#newQuota').insertAdjacentHTML('beforebegin','<div class="mini" style="margin-bottom:8px;padding:10px;border:1px solid var(--line);border-radius:10px">⏳ First start: the speech models are still downloading (about 4 GB, once). You can upload now — your video will start processing automatically when the download finishes.</div>')}}).catch(()=>{});window.META_MODELS_PENDING=1}
   $('#newQuota').innerHTML=left>0?`${left} of ${ME.usage.limit} videos left this month.`:`You've used all ${ME.usage.limit} videos this month. <a href="#/billing">Upgrade your plan</a> to make more.`;
@@ -522,6 +550,10 @@ async function newView(){
   $('#makeBtn').onclick=make;
   setMode('auto_edit');loadTemplates();
 }
+function setVis(v){N.vis=v;$$('#visOpts .opt').forEach(o=>o.setAttribute('aria-pressed',o.dataset.vis===v));$('#ownBox').classList.toggle('hide',v!=='own');$('#aiOpts').classList.toggle('hide',v!=='ai')}
+function addOwn(files){for(const f of files){if(!/^image\/(jpeg|png|webp)$/.test(f.type)||N.photos.length>=20)continue;N.photos.push(f)}drawOwn()}
+function drawOwn(){$('#phList').innerHTML=N.photos.map((f,i)=>`<div><img src="${URL.createObjectURL(f)}" alt=""><button type="button" data-rm="${i}" aria-label="Remove">×</button></div>`).join('');
+  $$('#phList [data-rm]').forEach(b=>b.onclick=()=>{N.photos.splice(+b.dataset.rm,1);drawOwn()})}
 function setMode(m){N.mode=m;$$('#modes .opt').forEach(o=>o.setAttribute('aria-pressed',o.dataset.mode===m));
   $('#pScript').classList.toggle('hide',m==='auto_edit');$('#pUpload').classList.toggle('hide',!['auto_edit','own_script'].includes(m));
   $('#pRecord').classList.toggle('hide',m!=='teleprompter');$('#aiNote').classList.toggle('hide',m!=='ai_voice');
@@ -576,6 +608,9 @@ async function make(){
   if(m!=='auto_edit'&&!script)return showErr(err,'Add the script first.');
   const fd=new FormData();fd.append('mode',m);fd.append('title',$('#nTitle').value);fd.append('language',$('#nLang').value);fd.append('style',N.style||'modern_educational');
   if(script)fd.append('script',script);if(video)fd.append('video',video,video.name);
+  if(N.vis==='own'&&!N.photos.length)return showErr(err,'Add your photos, or choose another option under “Pictures in your video”.');
+  fd.append('visuals',N.vis||'basic');if(N.vis==='ai')fd.append('animations',$('#vAnim').value);if($('#vStock').checked)fd.append('stock','1');
+  if(N.vis==='own')N.photos.forEach(f=>fd.append('photos',f,f.name));
   camOff();$('#makeBtn').disabled=true;const st=$('#status');st.classList.remove('hide');st.scrollIntoView({behavior:'smooth',block:'center'});
   setSt(video?'Uploading your recording…':'Starting…',0,'');
   try{

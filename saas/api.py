@@ -116,6 +116,14 @@ def create_project():
         _, _, src = pipeline.ingest(os.path.dirname(p.dir), up, p.id); os.remove(up)
         payload["src"] = src
         subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", "1", "-i", src, "-frames:v", "1", "-vf", "scale=360:-2", os.path.join(p.dir, "thumb.jpg")])
+    vis = f.get("visuals") if f.get("visuals") in ("ai", "own", "basic") else None
+    payload["visuals"] = {"mode": vis, "stock": f.get("stock") == "1"}
+    if f.get("animations", "").isdigit(): payload["visuals"]["animations"] = min(4, int(f["animations"]))
+    own = []
+    for ph in request.files.getlist("photos")[:20]:
+        pid_, err = _save_photo(p.dir, ph)
+        if pid_: own.append(pid_)
+    if own: payload["visuals"]["photos"] = own
     Session.add(Usage(user_id=u.id, project_id=p.id)); p.counted = True
     Session.commit()
     jobs.enqueue(p, "generate", payload, priority=1 if plan_cfg["priority"] else 0)
@@ -203,29 +211,35 @@ def ops(pid):
     return jsonify(res)
 
 
+def _save_photo(project_dir, f):
+    """Validate + re-encode an uploaded photo into <project>/photos/<id>.jpg (no EXIF/location kept). -> id or error text."""
+    import io, uuid
+    from PIL import Image, ImageOps
+    data = f.read(15 * 1024 * 1024 + 1)
+    if len(data) > 15 * 1024 * 1024: return None, "Photos can be up to 15 MB."
+    try:
+        Image.open(io.BytesIO(data)).verify()
+        im = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
+    except Exception:
+        return None, "That file isn't a photo we can read. Use JPG, PNG or WebP."
+    im.thumbnail((2000, 2000))
+    os.makedirs(os.path.join(project_dir, "photos"), exist_ok=True)
+    pid = uuid.uuid4().hex[:12]
+    im.save(os.path.join(project_dir, "photos", pid + ".jpg"), "JPEG", quality=90)
+    return pid, None
+
+
 @bp.post("/api/projects/<pid>/photos")
 @login_required
 def add_photo(pid):
     """Upload a photo (JPG/PNG/WebP) and place it in the video at a phrase or at the current preview time."""
-    import uuid
-    from PIL import Image, ImageOps
     from engine import commands
     p = _own(pid)
     if _busy(p): abort(409, "Wait until the first edit is finished.")
     f = request.files.get("photo")
     if not f: abort(400, "Choose a photo.")
-    data = f.read(15 * 1024 * 1024 + 1)
-    if len(data) > 15 * 1024 * 1024: abort(400, "Photos can be up to 15 MB.")
-    try:
-        import io
-        im = Image.open(io.BytesIO(data)); im.verify()
-        im = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
-    except Exception:
-        abort(400, "That file isn't a photo we can read. Use JPG, PNG or WebP.")
-    im.thumbnail((2000, 2000))
-    os.makedirs(os.path.join(p.dir, "photos"), exist_ok=True)
-    photo_id = uuid.uuid4().hex[:12]
-    im.save(os.path.join(p.dir, "photos", photo_id + ".jpg"), "JPEG", quality=90)  # re-encoded: no EXIF/location data kept
+    photo_id, err = _save_photo(p.dir, f)
+    if err: abort(400, err)
     if request.form.get("place") == "0":  # just add it to this video's photo library
         return jsonify({"ok": True, "photo": photo_id, "message": "Photo uploaded — now choose where it goes."})
     op = {"op": "add_photo", "photo": photo_id, "caption": (request.form.get("caption") or "").strip()[:80],
@@ -243,7 +257,12 @@ def add_photo(pid):
 def list_photos(pid):
     p = _own(pid); d = os.path.join(p.dir, "photos")
     ids = sorted((f[:-4] for f in os.listdir(d) if f.endswith(".jpg")), key=lambda i: os.path.getmtime(os.path.join(d, i + ".jpg"))) if os.path.isdir(d) else []
-    return jsonify({"photos": ids})
+    out = []
+    for i in ids:
+        mp = os.path.join(d, i + ".json")
+        meta = json.load(open(mp)) if os.path.exists(mp) else {}
+        out.append({"id": i, "ai": bool(meta.get("ai")), "brief": meta.get("brief", "")[:200]})
+    return jsonify({"photos": ids, "items": out})
 
 
 @bp.get("/api/stock/search")
@@ -271,6 +290,9 @@ def add_stock(pid):
     except Exception: clip = None
     if not clip: abort(502, "Couldn't download that video. Try another one.")
     op = {"op": "add_broll", "clip": clip}
+    try:
+        if b.get("dur"): op["dur"] = max(1.0, min(20.0, float(b["dur"])))
+    except (TypeError, ValueError): pass
     if str(b.get("sentence", "")).isdigit(): op["sentence"] = int(b["sentence"])
     else:
         try: op["t_out"] = max(0.0, float(b.get("t_out") or 0))

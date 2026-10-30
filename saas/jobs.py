@@ -81,7 +81,8 @@ def run_job(j):
                       "max_images": max(0, C.AI_PER_VIDEO["image"] - ai_count(s, p.id, "image")),
                       "max_animations": max(0, C.AI_PER_VIDEO["animation"] - ai_count(s, p.id, "animation"))}
             pipeline.create(p.dir, p.mode, src, p.script, p.style, _brand_for(u, plan_cfg), p.language, log=lambda m: None,
-                            progress=lambda x, m: prog(x * 0.5, m), title=None if p.title == "Untitled video" else p.title, ai_budget=budget)
+                            progress=lambda x, m: prog(x * 0.5, m), title=None if p.title == "Untitled video" else p.title, ai_budget=budget,
+                            visuals=payload.get("visuals"))
             plan_path = os.path.join(p.dir, "plan.json")
             plan = json.load(open(plan_path))
             for kind_, n_ in (plan.get("ai_usage") or {}).items():  # bill the illustrations/animations actually made

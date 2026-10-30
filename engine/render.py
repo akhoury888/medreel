@@ -12,6 +12,7 @@ from .draw import (font, font_for, fit_font, text_sprite, blit, rounded_mask, sh
                    ease_out_back, lerp, clamp, hex2rgb, draw_arrow)
 from . import graphics as G, planner as P, knowledge as K, music as M
 from . import graphics_pro as GP
+from . import sfx as SFX
 
 # ---------------- layouts (fractions of W,H) ----------------
 # doc: rect, r(adius frac of W), fx/fy (face position inside rect), face (face-height fraction; None=use zoom), alpha
@@ -331,6 +332,26 @@ def _outro(brand, W, H, T, accent, sec, logo, lang="en"):
 
 
 # ---------------- audio ----------------
+def sfx_events(plan, tl):
+    """When sounds happen, in output seconds: a whoosh as each visual scene enters, a pop for icon cards and
+    keyword pop-ups, an impact under the opening title, a shimmer on the end card."""
+    ev = []
+    if plan["title"].get("enabled") and plan["title"].get("text"): ev.append((0.08, "impact"))
+    last = -9.0
+    for sc in sorted(plan["scenes"], key=lambda x: x["start"]):
+        if not sc.get("enabled", True): continue
+        a, b = tl.to_out(sc["start"]), tl.to_out(sc["end"])
+        if b - a < 0.8: continue
+        if sc.get("layout") == "overlay" or sc["graphic"]["asset"] == "icons":
+            for it in sc["graphic"].get("items", [])[:3]: ev.append((a + it.get("at", 0) + 0.02, "pop"))
+        elif a - last > 1.2:
+            ev.append((max(0.0, a - 0.22), "whoosh")); last = a
+    for e in plan.get("emphasis", []):
+        if e.get("enabled", True): ev.append((tl.to_out(e["start"]), "pop"))
+    if plan["branding"].get("outro", True): ev.append((tl.duration + 0.05, "shimmer"))
+    return sorted(ev)
+
+
 def build_audio(plan, keeps, total, workdir, log):
     src = plan["source"]["path"]; out = os.path.join(workdir, "audio.m4a")
     au = plan["audio"]; parts = []
@@ -352,9 +373,16 @@ def build_audio(plan, keeps, total, workdir, log):
         target = clamp(mus.get("db", -24) - 5, -40, -20)
         fg += (f";[voice]asplit=2[v1][vsc];[1:a]atrim=0:{total:.3f},loudnorm=I={target:.1f}:TP=-3:LRA=7,aresample=44100,aformat=channel_layouts=stereo,"
                f"afade=t=in:d=0.6,afade=t=out:st={max(0, total-2.5):.3f}:d=2.5[m];"
-               f"[m][vsc]sidechaincompress=threshold=0.03:ratio=3:attack=20:release=400[md];[v1][md]amix=inputs=2:normalize=0:duration=first[aout]")
+               f"[m][vsc]sidechaincompress=threshold=0.03:ratio=3:attack=20:release=400[md];[v1][md]amix=inputs=2:normalize=0:duration=first[mixA]")
     else:
-        fg += ";[voice]anull[aout]"
+        fg += ";[voice]anull[mixA]"
+    ev = sfx_events(plan, P.Timeline(keeps)) if plan.get("effects", {}).get("sfx", True) else []
+    if ev:  # sound design: whooshes, pops, title impact (procedural, royalty-free)
+        sp = os.path.join(workdir, "sfx.wav"); SFX.render_track(ev, total, sp)
+        k = len(inputs) // 2; inputs += ["-i", sp]
+        fg += f";[{k}:a]atrim=0:{total:.3f},aresample=44100,aformat=channel_layouts=stereo[fx];[mixA][fx]amix=inputs=2:normalize=0:duration=first[aout]"
+    else:
+        fg += ";[mixA]anull[aout]"
     cmd = ["ffmpeg", "-y", "-v", "error", *inputs, "-filter_complex", fg, "-map", "[aout]", "-t", f"{total:.3f}", "-c:a", "aac", "-b:a", "192k", out]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode: raise RuntimeError("audio: " + r.stderr[-800:])
@@ -489,6 +517,10 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
         z *= 1 + zp["push"] * clamp((T - seg_out0) / max(2.0, seg_b - seg_a), 0, 1)
         for ea, eb in emph:
             if ea <= T < eb: z *= 1 + zp["punch"] * min(ease_out_cubic((T - ea) / 0.18), ease_in_out((eb - T) / 0.3))
+        fxon = plan.get("effects", {}).get("transitions", True)
+        if fxon and scn is not None:  # camera punch as a visual arrives / leaves
+            sa, sb = next((a, b) for a, b, sc in scenes if sc is scn)
+            z *= 1 + 0.06 * max(np.exp(-((T - sa) / 0.18) ** 2), np.exp(-((T - sb) / 0.18) ** 2))
         canvas = bg.copy()
         dx, dy, dw, dh = lay["doc"][0] * W, lay["doc"][1] * H, lay["doc"][2] * W, lay["doc"][3] * H
         gx, gy, gw, gh = lay["gfx"][0] * W, lay["gfx"][1] * H, lay["gfx"][2] * W, lay["gfx"][3] * H
@@ -537,6 +569,20 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
         else: draw_doc(); draw_gfx()
         if scn is not None and scn["layout"] == "split" and m > 0.01:
             cv2.line(canvas, (0, int(H * .5)), (int(W * m), int(H * .5)), accent, max(2, int(8 * s)))
+        if fxon and scn is not None and (gfx_img is not None or gfx_rgba is not None):
+            sa, sb = next((a, b) for a, b, sc in scenes if sc is scn)
+            u_ = (T - sa - 0.3) / 0.7  # diagonal light sweep across the visual, once, after it lands
+            if 0 < u_ < 1 and gw > 8 and gh > 8:
+                x0_, y0_, x1_, y1_ = int(max(0, gx)), int(max(0, gy)), int(min(W, gx + gw)), int(min(H, gy + gh))
+                if x1_ > x0_ and y1_ > y0_:
+                    yy_, xx_ = np.mgrid[y0_:y1_, x0_:x1_].astype(np.float32)
+                    pos = (xx_ - x0_) + (yy_ - y0_) * 0.45
+                    c_ = -0.3 * (x1_ - x0_) + u_ * 1.9 * (x1_ - x0_)
+                    band = np.exp(-((pos - c_) / (0.07 * (x1_ - x0_))) ** 2) * 0.22 * np.sin(np.pi * u_)
+                    roi = canvas[y0_:y1_, x0_:x1_].astype(np.float32)
+                    canvas[y0_:y1_, x0_:x1_] = np.clip(roi + band[..., None] * 255, 0, 255).astype(np.uint8)
+            fl = 0.30 * np.exp(-((T - sa) / 0.07) ** 2)  # quick flash on the cut
+            if fl > 0.01: canvas[:] = np.clip(canvas.astype(np.float32) * (1 - fl) + 255 * fl, 0, 255).astype(np.uint8)
         # avoid-zones for captions: face (when visible) + floating graphic card
         avoid = []; face_box = None
         if not presenter:
@@ -560,6 +606,10 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
                 if plan["title"]["style"] == "pop": spr2 = scale_rgba(spr, 0.7 + 0.3 * ease_out_back((T - 0.15 - i * .1) / 0.3)); dyy = 0
                 else: spr2 = spr; dyy = (1 - a) * 30 * s
                 blit(canvas, spr2, (W - spr2.shape[1]) / 2, ty + dyy, a); ty += spr.shape[0] + 10 * s
+            if plan.get("effects", {}).get("transitions", True):  # accent bar sweeps in under the title
+                bw_ = int(W * 0.34 * ease_out_cubic((T - 0.45) / 0.4) * min(1, (3.4 - T) / 0.3))
+                if bw_ > 4: cv2.rectangle(canvas, (int((W - bw_) / 2), int(ty + 4 * s)), (int((W + bw_) / 2), int(ty + 12 * s)), accent, -1)
+                ty += 16 * s
             avoid.append((0, 0.1, 1, ty / H))
         # lower third
         if lower is not None and 0.6 <= T < 5.0 and (scn is None or m < 0.99):

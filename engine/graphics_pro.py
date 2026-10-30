@@ -221,7 +221,7 @@ def ct_calcium(W, H, t, D, mode="calcium", accent=(46, 160, 255), title=None, la
     cx0, cy0 = 0, 0
     P_view = lambda x, y: ((P(x, y)[0] - x0w) * k_, (P(x, y)[1] - y0w) * k_)
     if sweep < 1:  # reconstruction: image builds top->bottom behind a bright scan line
-        yl = int(n * sweep); view[yl:] = (view[yl:] * 0.0).astype(np.uint8)
+        yl = int(n * sweep); view[yl:] = (view[yl:] * 0.18).astype(np.uint8)  # dim preview below the scan line
         cv2.line(view, (0, min(n - 1, yl)), (n, min(n - 1, yl)), accent, max(2, int(3 * s)), cv2.LINE_AA)
     frame = np.zeros((n + 8, n + 8, 4), np.uint8)
     frame[4:-4, 4:-4, :3] = view; frame[4:-4, 4:-4, 3] = rounded_mask(n, n, int(28 * s))
