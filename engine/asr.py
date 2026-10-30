@@ -138,12 +138,27 @@ def _decode(rec, seg):
 
 
 def detect_language(a):
+    """Listen to several parts of the recording (start, middle, end), not just the opening: doctors often
+    open with an English word or two and then speak Arabic or French. English is only chosen when every
+    part sounds English and no Arabic script appears; otherwise the most common non-English language wins."""
+    import re, logging
     rec, _ = _whisper_rec("")
     regs = voiced_regions(a)
     if not regs: return "en"
-    s0 = regs[0][0]; s1 = min(len(a) / SR, s0 + 20)
-    r = _decode(rec, a[int(s0 * SR): int(s1 * SR)])
-    return (getattr(r, "lang", "") or "en").strip("<|>") or "en"
+    dur = len(a) / SR; t0, t1 = regs[0][0], regs[-1][1]
+    starts = sorted({round(t0, 1), round(max(t0, (t0 + t1) / 2 - 6), 1), round(max(t0, t1 - 13), 1)})
+    votes = []
+    for s0 in starts:
+        s1 = min(dur, s0 + 12)
+        if s1 - s0 < 2: continue
+        r = _decode(rec, a[int(s0 * SR): int(s1 * SR)])
+        lg = (getattr(r, "lang", "") or "en").strip("<|>") or "en"
+        if re.search(r"[\u0600-\u06FF]", getattr(r, "text", "") or ""): lg = "ar"
+        votes.append(lg)
+    logging.getLogger("medreel.asr").info("language votes: %s", votes)
+    other = [v for v in votes if v != "en"]
+    if not other: return "en"
+    return max(set(other), key=other.count)
 
 
 def _transcribe_whisper_sherpa(a, lang, name=None, context=None):
