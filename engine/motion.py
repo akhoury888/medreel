@@ -534,9 +534,33 @@ EXAMPLE = {"title": "Asthma attack", "bg": "dark", "elements": [
 ]}
 
 
-def _ask(prompt, max_tokens=6000):
-    from .imagegen import _claude
-    return _claude(prompt, max_tokens=max_tokens)
+LAST_ERROR = {}  # project dir -> why the last automatic design failed (shown in the Check tab)
+
+
+def _ask(prompt, max_tokens=6000, timeout=240):
+    """Claude call with a long timeout (a full scene can take 1-2 minutes to write) and one retry."""
+    import urllib.request, urllib.error
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if not key: return None
+    body = json.dumps({"model": os.environ.get("MEDREEL_LLM", "claude-sonnet-5-5"), "max_tokens": max_tokens,
+                       "messages": [{"role": "user", "content": prompt}]}).encode()
+    err = None
+    for attempt in range(2):
+        req = urllib.request.Request("https://api.anthropic.com/v1/messages", body,
+                                     {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
+        try:
+            r = json.loads(urllib.request.urlopen(req, timeout=timeout).read())
+            if r.get("stop_reason") == "max_tokens": log.warning("animation design was cut off (max_tokens)")
+            return "".join(c.get("text", "") for c in r.get("content", []) if c.get("type") == "text")
+        except urllib.error.HTTPError as e:
+            detail = ""
+            try: detail = e.read().decode()[:300]
+            except Exception: pass
+            err = RuntimeError(f"Claude HTTP {e.code}: {detail}")
+            if e.code in (400, 401, 403, 404): break  # bad key / model / no credit: retrying won't help
+        except Exception as e:
+            err = e
+    raise err
 
 
 def _parse(txt):
@@ -557,8 +581,10 @@ def design(sentence, context="", lang="en", specialty="", idea=""):
               + (f"Idea for the animation: {idea}\n" if idea else "")
               + f"Design the animation for that sentence. Labels and title in {lname}.")
     for attempt in range(2):
-        sc = validate(_parse(_ask(prompt)))
+        raw = _ask(prompt)
+        sc = validate(_parse(raw))
         if sc and len(sc["elements"]) >= 3: return sc
+        log.warning("animation design unusable (attempt %d): %s", attempt + 1, (raw or "")[:300].replace("\n", " "))
     return None
 
 
@@ -570,6 +596,7 @@ def pick_moments(sentences, specialty="", want=2, lang="en"):
                "disease mechanism, how a treatment works, a number or risk changing). Skip greetings, introductions and sign-offs, spread "
                'them through the video. Return ONLY JSON: [{"i": <number>, "idea": "<one sentence in English describing the animation>"}]', 800)
     try:
+        if not txt: return []
         arr = json.loads(txt[txt.index("["): txt.rindex("]") + 1])
         ok = {i for i, _ in sentences}
         out, seen = [], set()
@@ -578,6 +605,7 @@ def pick_moments(sentences, specialty="", want=2, lang="en"):
                 seen.add(int(x["i"])); out.append({"i": int(x["i"]), "idea": _txt(x.get("idea"), 300)})
         return out[:want]
     except Exception:
+        log.warning("animation moments: could not read Claude's answer: %s", (txt or "")[:300])
         return []
 
 
@@ -618,18 +646,33 @@ def auto(plan, project_dir, n=2):
     busy = [(s["start"], s["end"]) for s in plan["scenes"] if s["graphic"]["asset"] not in ("icons",)]
     free = [(i, s["text"]) for i, s in enumerate(sents) if s["end"] - s["start"] >= 1.2 and s["start"] > (3.5 if presenter else 1.0)
             and not any(a < s["end"] - 0.3 and b > s["start"] + 0.3 for a, b in busy)]
-    picks = pick_moments(free, plan["branding"].get("specialty", ""), n, plan.get("language", "en"))
-    added = 0
+    log.info("AI animations: %d free sentence(s) to choose from", len(free))
+    if not free:
+        _note(plan, "No free moment was left for an AI-designed animation — add one from the storyboard (click a sentence)."); return 0
+    try:
+        picks = pick_moments(free, plan["branding"].get("specialty", ""), n, plan.get("language", "en"))
+    except Exception as e:
+        _note(plan, f"AI-designed animations were skipped: {str(e)[:160]}"); log.warning("animation moments failed: %s", e); return 0
+    if not picks:
+        _note(plan, "Claude didn't pick moments for AI-designed animations — add one from the storyboard (click a sentence)."); return 0
+    added = 0; errors = []
     with cf.ThreadPoolExecutor(max_workers=3) as ex:
         futs = {ex.submit(create_for_sentence, plan, project_dir, p["i"], p["idea"]): p["i"] for p in picks}
         for fu in cf.as_completed(futs):
             try:
                 sid, title = fu.result()
-                if not sid: continue
+                if not sid: errors.append("design unusable"); continue
                 i = futs[fu]
                 plan["scenes"] = [x for x in plan["scenes"] if not (x["graphic"]["asset"] == "icons" and x["start"] < sents[i]["end"] and x["end"] > sents[i]["start"])]
                 msg = C.apply(plan, {"op": "add_gen", "scene": sid, "sentence": i, "title": title})
                 if msg.startswith("Added"): added += 1
-            except Exception:
-                log.exception("AI animation failed")
+            except Exception as e:
+                errors.append(str(e)[:160]); log.exception("AI animation failed")
+    if errors and not added: _note(plan, f"AI-designed animations could not be made this time ({errors[0]}). Try “Create a medical animation here” in the storyboard.")
     return added
+
+
+def _note(plan, msg):
+    """A visible note in the Check tab (warn level) so failures are never silent."""
+    plan.setdefault("analysis", {}).setdefault("qa", {}).setdefault("issues", []).append({"area": "animations", "level": "warn", "msg": msg})
+    log.warning(msg)
