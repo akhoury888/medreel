@@ -80,6 +80,15 @@ def run_job(j):
             budget = {"credits": ai_credits_left(s, u), "image": C.AI_COST["image"], "animation": C.AI_COST["animation"],
                       "max_images": max(0, C.AI_PER_VIDEO["image"] - ai_count(s, p.id, "image")),
                       "max_animations": max(0, C.AI_PER_VIDEO["animation"] - ai_count(s, p.id, "animation"))}
+            vis = dict(payload.get("visuals") or {})
+            if vis.get("look") == "surprise":  # never the same look as the doctor's last two videos
+                recent = s.execute(select(Project).where(Project.user_id == u.id, Project.id != p.id).order_by(Project.created_at.desc()).limit(2)).scalars().all()
+                av = []
+                for rp in recent:
+                    try: av.append(json.load(open(os.path.join(rp.dir, "plan.json"))).get("design", {}).get("look"))
+                    except Exception: pass
+                vis["avoid_looks"] = [a for a in av if a]
+            payload["visuals"] = vis
             pipeline.create(p.dir, p.mode, src, p.script, p.style, _brand_for(u, plan_cfg), p.language, log=lambda m: None,
                             progress=lambda x, m: prog(x * 0.5, m), title=None if p.title == "Untitled video" else p.title, ai_budget=budget,
                             visuals=payload.get("visuals"))

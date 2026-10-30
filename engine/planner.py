@@ -17,7 +17,45 @@ STYLES = {
     "minimalist_premium": {"label": "Minimalist premium", "captions": "minimal", "zoom": 0.04, "punch": 0.05, "push": 0.03,
                            "transition": 0.55, "grade": "soft", "music": "calm", "music_db": -27, "progress_bar": False, "title": "fade", "fx": 0.4, "flash": False},
 }
-CAPTION_STYLES = ["minimal", "highlight", "pop"]  # increasing dynamism
+CAPTION_STYLES = ["minimal", "highlight", "pop"]  # increasing dynamism ("more/less dynamic" moves along this list)
+# every subtitle design (name -> label shown to the doctor)
+CAPTION_LOOKS = {"highlight": "Highlighted word", "pop": "Big & punchy", "minimal": "Clean & simple", "boxed": "Subtitle bar",
+                 "outline": "Bold outline", "karaoke": "Karaoke colour", "neon": "Neon glow", "bubble": "White bubble",
+                 "typewriter": "Word by word"}
+
+# ---------------- design system: colours, frame, transitions, title, background — combined into named Looks
+PALETTES = {  # name -> (label, accent, background)
+    "brand": ("My brand colours", None, None),
+    "ocean": ("Ocean blue", "#2EA0FF", "#0B1730"), "emerald": ("Emerald", "#10B981", "#052920"),
+    "coral": ("Coral", "#FF5A5F", "#2A0E16"), "royal": ("Royal purple", "#8B5CF6", "#170F33"),
+    "sunset": ("Sunset", "#F59E0B", "#291504"), "teal": ("Teal", "#14B8A6", "#042B2A"),
+    "rose": ("Rose", "#EC4899", "#2A0A1E"), "crimson": ("Crimson", "#E11D48", "#1E0A12"), "sky": ("Sky", "#38BDF8", "#06202E"),
+}
+FRAMES = {"full": "Full screen", "card": "Rounded card", "border": "Thin frame"}
+TRANSITIONS = {"flash": "Flash & punch", "slide": "Slide in", "zoom": "Zoom in", "wipe": "Circle reveal", "glitch": "Glitch"}
+TITLES = {"classic": "Colour labels", "boxed": "Solid block", "big": "Huge words", "underline": "Clean underline"}
+BACKGROUNDS = {"gradient": "Soft glow", "plain": "Plain colour", "grid": "Medical grid", "dots": "Dots"}
+LOOKS = {  # name -> settings; "style" = pace, colour grade and music
+    "clinic":   {"label": "Clinic clean", "desc": "Calm, trustworthy, subtitle bar", "style": "clean_professional", "palette": "ocean",
+                 "captions": "boxed", "frame": "full", "transition": "zoom", "title": "underline", "bg": "gradient"},
+    "social":   {"label": "Bold social", "desc": "Big outlined words, fast cuts", "style": "high_energy", "palette": "coral",
+                 "captions": "outline", "frame": "full", "transition": "glitch", "title": "big", "bg": "plain"},
+    "neon":     {"label": "Night neon", "desc": "Glowing subtitles, thin frame", "style": "high_energy", "palette": "royal",
+                 "captions": "neon", "frame": "border", "transition": "flash", "title": "big", "bg": "grid"},
+    "editorial": {"label": "Editorial", "desc": "Magazine card, white bubbles", "style": "minimalist_premium", "palette": "sunset",
+                  "captions": "bubble", "frame": "card", "transition": "slide", "title": "boxed", "bg": "dots"},
+    "care":     {"label": "Warm care", "desc": "Soft colours, karaoke words", "style": "clean_professional", "palette": "rose",
+                 "captions": "karaoke", "frame": "card", "transition": "slide", "title": "classic", "bg": "gradient"},
+    "lab":      {"label": "Science lab", "desc": "Grid background, circle reveals", "style": "modern_educational", "palette": "teal",
+                 "captions": "highlight", "frame": "border", "transition": "wipe", "title": "boxed", "bg": "grid"},
+    "cinema":   {"label": "Cinema", "desc": "Film colours, quiet subtitles", "style": "cinematic_medical", "palette": "sky",
+                 "captions": "minimal", "frame": "full", "transition": "zoom", "title": "underline", "bg": "gradient"},
+    "story":    {"label": "Story time", "desc": "Words appear as you speak", "style": "modern_educational", "palette": "emerald",
+                 "captions": "typewriter", "frame": "card", "transition": "wipe", "title": "classic", "bg": "dots"},
+    "pulse":    {"label": "Pulse", "desc": "Energetic, highlighted words", "style": "high_energy", "palette": "crimson",
+                 "captions": "pop", "frame": "full", "transition": "flash", "title": "big", "bg": "plain"},
+}
+DESIGN_FIELDS = {"palette": PALETTES, "frame": FRAMES, "transition": TRANSITIONS, "title": TITLES, "bg": BACKGROUNDS}
 MUSIC_TRACKS = ["calm", "pulse", "drive", "cinematic"]
 LAYOUTS = ["full", "side", "pip", "full_graphic", "split", "labels"]
 
@@ -159,6 +197,33 @@ def build_plan(source_path, asr_backend, words, analysis, style="modern_educatio
         "grade": st["grade"],
         "output": {"width": 1080, "height": 1920, "fps": 30},
     }
+
+
+def apply_look(plan, look, keep_brand=False):
+    """A named Look = pace/grade/music (style) + colours + subtitles + frame + transitions + title + background."""
+    lk = LOOKS[look]
+    apply_style(plan, lk["style"])
+    d = plan.setdefault("design", {})
+    d.update({k: lk[k] for k in DESIGN_FIELDS}); d["look"] = look
+    if keep_brand: d["palette"] = "brand"
+    if plan.get("presenter", True) or lk["captions"] not in ("minimal",): plan["captions"]["style"] = lk["captions"]
+    return plan
+
+
+def pick_look(avoid=(), seed=None):
+    """A different Look for each new video (never one of the doctor's most recent ones)."""
+    import random
+    r = random.Random(seed)
+    pool = [k for k in LOOKS if k not in set(avoid)] or list(LOOKS)
+    return r.choice(pool)
+
+
+def colors(plan):
+    """(accent hex, background hex) after the video's colour palette."""
+    pal = PALETTES.get(plan.get("design", {}).get("palette", "brand"))
+    b = plan["branding"]
+    if not pal or not pal[1]: return b["primary"], b["secondary"]
+    return pal[1], pal[2]
 
 
 def apply_style(plan, style):

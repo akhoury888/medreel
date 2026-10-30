@@ -9,7 +9,8 @@ import json, os, re, uuid
 from . import planner as P, knowledge as K
 
 OPS_SCHEMA = {
-    "set_style": {"style": list(P.STYLES)}, "caption_dynamism": {"delta": "int"}, "set_caption_style": {"style": P.CAPTION_STYLES},
+    "set_style": {"style": list(P.STYLES)}, "caption_dynamism": {"delta": "int"}, "set_caption_style": {"style": list(P.CAPTION_LOOKS)},
+    "set_look": {"look": list(P.LOOKS) + ["surprise"]}, "set_design": {k: list(v) for k, v in P.DESIGN_FIELDS.items()},
     "captions_enabled": {"enabled": "bool"}, "cut_range": {"start_out": "sec", "end_out": "sec"}, "remove_pause_near": {"t_out": "sec"},
     "cut_phrase": {"phrase": "str"}, "enable_cuts": {"reason": "silence|retake|filler"}, "approve_fillers": {}, "restore_all_cuts": {"reason": "silence|retake|filler|manual|any"},
     "add_graphic": {"asset": "coronary/narrowing|coronary/occlusion|coronary/stent|ecg/sinus|bp/gauge|ct/calcium|ct/scanner|heart/coronaries", "phrase": "str?", "t_out": "sec?", "layout": "layout?"},
@@ -102,6 +103,7 @@ def parse_rules(cmd):
                     ("educational|modern", "modern_educational")):
         if re.search(rf"(style|look|feel|make it|make the video).*({key})|({key}).*(style|look)", c) and not any(o["op"] == "set_style" for o in ops) and "caption" not in c and "subtitle" not in c and "music" not in c:
             ops.append({"op": "set_style", "style": st}); break
+    if re.search(r"(new|different|another|change the|random|surprise).{0,12}(look|design|template)|surprise me", c): ops.append({"op": "set_look", "look": "surprise"})
     if re.search(r"(more|bigger|stronger) zoom|zoom (in )?more", c): ops.append({"op": "zoom", "delta": 0.06})
     elif re.search(r"(less|smaller|subtle|no) zoom|zoom less|stop zooming", c): ops.append({"op": "zoom", "delta": -0.06})
     m = re.search(r"(?:change|set|make) (?:the )?title (?:to|:)\s*[\"“']?(.+?)[\"”']?$", cmd.strip(), re.I)
@@ -118,7 +120,10 @@ set_layout: how an animation is shown with the doctor (asset optional = all). fa
 set_music: track calm|pulse|drive|cinematic, or next/off/on. music_volume: delta_db (+3 louder, -4 quieter).
 zoom: delta (+0.06 more camera zoom, -0.06 less). translate_captions + caption_mode: subtitles in another language (both = original + translation).
 set_title / title_enabled: the opening title. image_style: AI illustration style. set_effects: transitions = motion graphics on/off, sfx = sound effects on/off.
-delete_scene / scene_time: remove or retime a visual by id (times in preview seconds)."""
+delete_scene / scene_time: remove or retime a visual by id (times in preview seconds).
+set_look: switch the whole design to a named Look ("surprise" = a random different one). set_design: change only some parts
+(palette = colours, frame = how the doctor's video is framed, transition = how visuals enter, title = opening title design, bg = background).
+set_caption_style: subtitle design (highlight, pop, minimal, boxed, outline, karaoke, neon, bubble, typewriter)."""
 
 
 def parse_llm(cmd, plan):
@@ -234,10 +239,24 @@ def apply(plan, op):
     if o == "set_style":
         P.apply_style(plan, op["style"]); return f"Applied the “{P.STYLES[op['style']]['label']}” style (cuts, graphics and branding kept)."
     if o == "caption_dynamism":
-        i = P.CAPTION_STYLES.index(plan["captions"]["style"]); j = max(0, min(len(P.CAPTION_STYLES) - 1, i + op["delta"]))
+        i = P.CAPTION_STYLES.index(plan["captions"]["style"]) if plan["captions"]["style"] in P.CAPTION_STYLES else 1
+        j = max(0, min(len(P.CAPTION_STYLES) - 1, i + op["delta"]))
         plan["captions"]["style"] = P.CAPTION_STYLES[j]
         return f"Subtitles: {P.CAPTION_STYLES[i]} → {P.CAPTION_STYLES[j]}." if i != j else f"Subtitles are already at the {P.CAPTION_STYLES[i]} extreme."
-    if o == "set_caption_style": plan["captions"]["style"] = op["style"]; return f"Subtitle style set to {op['style']}."
+    if o == "set_caption_style":
+        if op.get("style") not in P.CAPTION_LOOKS: return "Unknown subtitle style."
+        plan["captions"]["style"] = op["style"]; return f"Subtitles: {P.CAPTION_LOOKS[op['style']]}."
+    if o == "set_look":
+        lk = op.get("look")
+        if lk == "surprise": lk = P.pick_look(avoid=[plan.get("design", {}).get("look")])
+        if lk not in P.LOOKS: return "Unknown look."
+        P.apply_look(plan, lk, keep_brand=plan.get("design", {}).get("palette") == "brand" and op.get("keep_brand", False))
+        return f"New look: {P.LOOKS[lk]['label']}."
+    if o == "set_design":
+        d = plan.setdefault("design", {}); done = []
+        for k, opts in P.DESIGN_FIELDS.items():
+            if k in op and op[k] in opts: d[k] = op[k]; done.append(opts[op[k]] if isinstance(opts[op[k]], str) else opts[op[k]][0])
+        return ("Design: " + ", ".join(done) + ".") if done else "Nothing changed."
     if o == "captions_enabled": plan["captions"]["enabled"] = op["enabled"]; return "Subtitles " + ("on." if op["enabled"] else "off.")
     if o == "approve_fillers":
         n = 0

@@ -134,6 +134,7 @@ label.f .hint{display:block;font-weight:400;color:var(--steel);font-size:13px;ma
 .opt svg{width:40px;height:40px}
 .opt b{font-family:var(--display);font-size:19px;line-height:1.15}
 .opt span{font-size:14px;color:var(--steel)}
+.chip .sw{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:0}
 .choose.vis{grid-template-columns:repeat(3,1fr)}.vcost{font-style:normal;font-size:12px;font-weight:700;color:var(--red,#C8233A)}
 .phlist{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.phlist div{position:relative}.phlist img{width:70px;height:70px;object-fit:cover;border-radius:10px;display:block}
 .phlist button{position:absolute;top:-6px;right:-6px;border:0;background:#1B2438;color:#fff;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:12px;line-height:20px;padding:0}
@@ -326,7 +327,8 @@ textarea.script{min-height:220px;line-height:1.6;resize:vertical}
       <label class="f" style="margin-top:0">Title <span class="muted" style="font-weight:400">(optional)</span><input id="nTitle" placeholder="e.g. What is a calcium score?"></label>
       <label class="f" style="margin-top:0">Language of the video<select id="nLang"><option value="auto">Detect from my voice</option><option value="ar">Arabic (Lebanese)</option><option value="en">English</option><option value="fr">French</option></select></label>
     </div>
-    <label class="f">Editing style</label><div class="chips" id="nStyles" role="group" aria-label="Editing style"></div>
+    <label class="f">Look of the video</label><div class="chips" id="nStyles" role="group" aria-label="Look"></div>
+    <label class="small" style="display:block;margin-top:8px"><input type="checkbox" id="nBrand"> Always use my brand colours</label>
   </div>
 
   <div class="panel hide" id="pScript">
@@ -543,8 +545,10 @@ async function newView(){
   if(window.META_MODELS_PENDING===undefined){api('/api/meta').then(m=>{if(!m.models_ready){$('#newQuota').insertAdjacentHTML('beforebegin','<div class="mini" style="margin-bottom:8px;padding:10px;border:1px solid var(--line);border-radius:10px">⏳ First start: the speech models are still downloading (about 4 GB, once). You can upload now — your video will start processing automatically when the download finishes.</div>')}}).catch(()=>{});window.META_MODELS_PENDING=1}
   $('#newQuota').innerHTML=left>0?`${left} of ${ME.usage.limit} videos left this month.`:`You've used all ${ME.usage.limit} videos this month. <a href="#/billing">Upgrade your plan</a> to make more.`;
   $('#nLang').value=ME.default_language||'auto';
-  $('#nStyles').innerHTML=Object.entries(META.styles).map(([k,v])=>`<button type="button" class="chip" data-style="${k}" aria-pressed="${k===N.style}">${esc(v)}</button>`).join('');
-  $$('#nStyles .chip').forEach(c=>c.onclick=()=>{N.style=c.dataset.style;$$('#nStyles .chip').forEach(x=>x.setAttribute('aria-pressed',x===c))});
+  N.look='surprise';
+  $('#nStyles').innerHTML=`<button type="button" class="chip" data-look="surprise" aria-pressed="true">🎲 A different look every video</button>`+Object.entries(META.looks||{}).map(([k,v])=>`<button type="button" class="chip" data-look="${k}" aria-pressed="false" title="${esc(v.desc)}"><i class="sw" style="background:${(META.palettes[v.palette]||{}).accent||'#ccc'}"></i>${esc(v.label)}</button>`).join('');
+  $$('#nStyles .chip').forEach(c=>c.onclick=()=>{N.look=c.dataset.look;$$('#nStyles .chip').forEach(x=>x.setAttribute('aria-pressed',x===c))});
+  try{$('#nBrand').checked=localStorage.getItem('mr_brand')==='1'}catch(e){}$('#nBrand').onchange=e=>{try{localStorage.setItem('mr_brand',e.target.checked?'1':'0')}catch(_){}};
   $$('#modes .opt').forEach(o=>o.onclick=()=>setMode(o.dataset.mode));
   const drop=$('#drop');drop.onclick=()=>$('#file').click();drop.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('#file').click()}};
   drop.ondragover=e=>{e.preventDefault();drop.classList.add('on')};drop.ondragleave=()=>drop.classList.remove('on');
@@ -630,7 +634,7 @@ async function make(){
   if(m==='auto_edit'&&!video)return showErr(err,'Add your video first.');
   if(m==='rec'&&!video)return showErr(err,'Record your video first: turn on the camera, then press Start recording.');
   if(m==='voice'&&!video)return showErr(err,'Add an audio file or record your voice first.');
-  const fd=new FormData();fd.append('mode',m==='rec'?'auto_edit':m);fd.append('title',$('#nTitle').value);fd.append('language',$('#nLang').value);fd.append('style',N.style||'modern_educational');
+  const fd=new FormData();fd.append('mode',m==='rec'?'auto_edit':m);fd.append('title',$('#nTitle').value);fd.append('language',$('#nLang').value);fd.append('style',N.style||'modern_educational');fd.append('look',N.look||'surprise');if($('#nBrand').checked)fd.append('keep_brand','1');
   if(video)fd.append(m==='voice'?'audio':'video',video,video.name);
   if(N.vis==='own'&&!N.photos.length)return showErr(err,'Add your photos, or choose another option under “Pictures in your video”.');
   fd.append('visuals',N.vis||'basic');if(N.vis==='ai')fd.append('animations',$('#vAnim').value);if($('#vStock').checked)fd.append('stock','1');

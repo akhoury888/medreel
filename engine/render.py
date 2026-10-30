@@ -5,7 +5,7 @@ composition (reframe/zoom, scene layouts with animated transitions, procedural
 medical animations, captions, titles, branding, outro) -> ffmpeg/libx264.
 Audio: ffmpeg filtergraph (segment concat with micro-fades, high-pass, FFT denoise,
 compression, EBU R128 loudness -14 LUFS, music bed with side-chain ducking)."""
-import os, re, subprocess, time
+import math, os, re, subprocess, time
 import numpy as np, cv2
 from PIL import Image, ImageDraw
 from .draw import (font, font_for, fit_font, text_sprite, blit, rounded_mask, shadow_rect, scale_rgba, ease_out_cubic, ease_in_out,
@@ -81,11 +81,18 @@ def _crop(frame, face, rect_wh, fx, fy, face_frac, zoom, zm=1.0):
 
 
 # ---------------- captions ----------------
+# subtitle designs: words per line, characters per line, Latin font (family, weight, size), Arabic weight
+CAPCFG = {"pop": (3, 18, ("Poppins", 700, 84), 800), "highlight": (4, 26, ("Poppins", 700, 66), 700), "minimal": (6, 38, ("Inter", 600, 54), 500),
+          "boxed": (5, 30, ("Poppins", 700, 58), 700), "outline": (3, 20, ("Poppins", 700, 80), 800), "karaoke": (4, 24, ("Poppins", 700, 70), 800),
+          "neon": (4, 24, ("Poppins", 700, 70), 800), "bubble": (4, 24, ("Poppins", 700, 60), 800), "typewriter": (5, 30, ("Inter", 700, 62), 700)}
+
+
 class Captions:
     """source='original' -> spoken words (word-synced); source='translated' -> plan.captions.translations
     (per sentence, words timed across the sentence's kept span). Arabic is laid out right-to-left."""
     def __init__(self, plan, tl, W, H, accent, source="original", style=None, scale=1.0):
         self.style = style or plan["captions"]["style"]; self.W, self.H = W, H; self.accent = accent
+        if self.style not in CAPCFG: self.style = "highlight"
         self.s = W / 1080 * scale
         cuts = [(c["start"], c["end"]) for c in plan["cuts"] if c["enabled"]]
         kept = lambda w: not w.get("deleted") and not K.is_hesitation(w["text"]) and not any(a <= (w["start"] + w["end"]) / 2 <= b for a, b in cuts) and tl.is_kept((w["start"] + w["end"]) / 2)
@@ -112,8 +119,8 @@ class Captions:
                     d = (o1 - o0) * wt / tot
                     words.append({"text": tk, "s": t0, "e": t0 + d, "kw": i in kwi, "eos": i == len(toks) - 1}); t0 += d
         self.rtl = bool(words) and sum(K.is_ar(w["text"]) for w in words) > 0.3 * len(words)
-        maxw = plan["captions"].get("max_words") or {"pop": 3, "highlight": 4, "minimal": 6}[self.style]
-        maxc = {"pop": 18, "highlight": 26, "minimal": 38}[self.style]
+        maxw = plan["captions"].get("max_words") or CAPCFG[self.style][0]
+        maxc = CAPCFG[self.style][1]
         groups, cur = [], []
         for i, w in enumerate(words):
             cur.append(w)
@@ -133,24 +140,21 @@ class Captions:
         return "\n".join(f"{i+1}\n{ts(g['s'])} --> {ts(g['e'])}\n{' '.join(w['text'] for w in g['words'])}\n" for i, g in enumerate(self.groups))
 
     def _fonts(self):
-        s = self.s
+        s = self.s; st = self.style; _, _, (fam, wt, size), arw = CAPCFG[st]
         if self.rtl:
-            if self.style == "pop": return font("Tajawal", 800, int(88 * s)), font("Tajawal", 800, int(98 * s))
-            if self.style == "highlight": return font("Tajawal", 700, int(70 * s)), None
-            return font("Tajawal", 500, int(58 * s)), None
-        if self.style == "pop": return font("Poppins", 700, int(84 * s)), font("Poppins", 700, int(94 * s))
-        if self.style == "highlight": return font("Poppins", 700, int(66 * s)), None
-        return font("Inter", 600, int(54 * s)), None
+            f = font("Tajawal", arw, int(size * 1.06 * s))
+            return f, (font("Tajawal", arw, int(size * 1.17 * s)) if st in ("pop", "outline") else None)
+        return font(fam, wt, int(size * s)), (font(fam, wt, int(size * 1.12 * s)) if st in ("pop", "outline") else None)
 
     def sprite(self, gi, active):
         key = (gi, active)
         if key in self.cache: return self.cache[key]
         g = self.groups[gi]; st = self.style; s = self.s
         f, fa = self._fonts()
-        texts = [w["text"].upper() if st == "pop" else w["text"] for w in g["words"]]
-        if st == "pop": texts = [re.sub(r"[.,;:،؟]$", "", t) for t in texts]
+        texts = [w["text"].upper() if st in ("pop", "outline") and not self.rtl else w["text"] for w in g["words"]]
+        if st in ("pop", "outline"): texts = [re.sub(r"[.,;:،؟]$", "", t) for t in texts]
         space = f.getlength(" ")
-        fonts = [fa if (st == "pop" and i == active) else f for i in range(len(texts))]
+        fonts = [fa if (fa is not None and i == active) else f for i in range(len(texts))]
         widths = [fo.getlength(t) for fo, t in zip(fonts, texts)]
         maxw = self.W * 0.86
         lines, cur, cw = [], [], 0
@@ -163,6 +167,12 @@ class Captions:
         H_ = lh * len(lines) + 2 * pad
         im = Image.new("RGBA", (W_, H_), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
         acc = self.accent; kwcol = (255, 214, 74)
+        if st == "boxed":  # each line on a dark bar
+            for li, ln in enumerate(lines):
+                lw = sum(widths[i] for i in ln) + space * (len(ln) - 1); x0b = (W_ - lw) / 2 - 22 * s; y0b = pad + li * lh - 6 * s
+                d.rounded_rectangle((x0b, y0b, x0b + lw + 44 * s, y0b + lh - 2 * s), radius=int(12 * s), fill=(10, 16, 32, 215))
+        elif st == "bubble":  # one white speech bubble behind the whole line
+            d.rounded_rectangle((pad * 0.35, pad * 0.45, W_ - pad * 0.35, H_ - pad * 0.45), radius=int(min(H_ * 0.3, 40 * s)), fill=(255, 255, 255, 245))
         for li, ln in enumerate(lines):
             lw = sum(widths[i] for i in ln) + space * (len(ln) - 1)
             x = (W_ - lw) / 2; y = pad + li * lh
@@ -191,11 +201,37 @@ class Captions:
                         d.rounded_rectangle((bb[0] - 12 * s, bb[1] - 8 * s, bb[2] + 12 * s, bb[3] + 10 * s), radius=int(14 * s), fill=acc + (255,))
                     col = (255, 255, 255) if (i == active or not is_kw) else kwcol
                     d.text((x, yy), t, font=fo, fill=col + (255,), stroke_width=int(4 * s), stroke_fill=(0, 0, 0, 230))
+                elif st == "outline":  # classic social subtitles: white, thick black outline, the spoken word a bit bigger
+                    col = kwcol if is_kw else (255, 255, 255)
+                    d.text((x, yy), t, font=fo, fill=col + (255,), stroke_width=int(10 * s), stroke_fill=(0, 0, 0, 255))
+                elif st == "karaoke":  # words fill with colour as they are spoken
+                    col = acc if i <= active else (255, 255, 255)
+                    d.text((x, yy), t, font=fo, fill=col + (255,), stroke_width=int(6 * s), stroke_fill=(0, 0, 0, 255))
+                elif st == "neon":
+                    col = (255, 255, 255) if i != active else _tint(acc, 0.55)
+                    d.text((x, yy), t, font=fo, fill=col + (255,), stroke_width=max(1, int(2 * s)), stroke_fill=acc + (255,))
+                elif st == "bubble":
+                    col = acc if i == active else (27, 36, 56)
+                    d.text((x, yy), t, font=fo, fill=col + (255,))
+                elif st == "typewriter":
+                    if i > active: continue  # not said yet: space is kept so the line doesn't jump
+                    col = acc if i == active else (kwcol if is_kw else (255, 255, 255))
+                    d.text((x, yy), t, font=fo, fill=col + (255,), stroke_width=int(5 * s), stroke_fill=(0, 0, 0, 255))
+                elif st == "boxed":
+                    col = acc if i == active else (kwcol if is_kw else (255, 255, 255))
+                    d.text((x, yy), t, font=fo, fill=_tint(col, 0.15) + (255,))
                 else:
                     col = kwcol if is_kw else (255, 255, 255)
                     d.text((x, yy), t, font=fo, fill=col + (255,), stroke_width=max(1, int(2 * s)), stroke_fill=(0, 0, 0, 160))
         arr = np.array(im)
-        if st in ("minimal", "highlight"):  # soft drop shadow
+        if st == "neon":  # coloured glow under the letters
+            a = arr[..., 3].astype(np.float32)
+            gl = cv2.GaussianBlur(a, (0, 0), 9 * s) * 1.6 + cv2.GaussianBlur(a, (0, 0), 3 * s)
+            out = np.zeros_like(arr, np.float32); out[..., :3] = acc; out[..., 3] = np.clip(gl, 0, 255)
+            fa_ = arr[..., 3:4] / 255.0
+            out[..., :3] = arr[..., :3] * fa_ + out[..., :3] * (1 - fa_); out[..., 3] = np.maximum(out[..., 3], arr[..., 3])
+            arr = out.astype(np.uint8)
+        if st in ("minimal", "highlight", "bubble", "boxed"):  # soft drop shadow
             a = arr[..., 3].astype(np.float32)
             sh = cv2.GaussianBlur(a, (0, 0), 6 * s)
             sh = np.roll(sh, int(4 * s), axis=0)
@@ -231,17 +267,27 @@ class Captions:
                     if best is None or pen < best[0]: best = (pen, yc)
                 g["y"] = best[1] if best else 0.775
             age = T - g["s"]
-            if self.style == "pop":
+            st = self.style
+            if st in ("pop", "outline"):
                 sc = 0.78 + 0.22 * ease_out_back(age / 0.16); spr2 = scale_rgba(spr, sc); al = 1
-            elif self.style == "highlight":
+            elif st == "bubble":
+                sc = 0.9 + 0.1 * ease_out_back(age / 0.2); spr2 = scale_rgba(spr, sc); al = ease_out_cubic(age / 0.12)
+            elif st in ("highlight", "boxed"):
                 spr2 = spr; al = ease_out_cubic(age / 0.12)
+            elif st == "typewriter":
+                spr2 = spr; al = 1
+            elif st == "neon":
+                spr2 = spr; al = ease_out_cubic(age / 0.2) * (0.75 + 0.25 * (age > 0.08 or (age * 40) % 2 > 1))  # tiny flicker as it lights up
             else:
                 spr2 = spr; al = ease_out_cubic(age / 0.2)
-            dy = (1 - ease_out_cubic(age / 0.15)) * 18 * self.s if self.style == "highlight" else 0
+            dy = (1 - ease_out_cubic(age / 0.15)) * 18 * self.s if st in ("highlight", "boxed", "karaoke") else 0
             top = g["y"] * H - spr2.shape[0] / 2 + dy
             blit(canvas, spr2, (W - spr2.shape[1]) / 2, top, al)
             return (top, top + spr2.shape[0])
         return None
+
+
+def _tint(c, k): return tuple(int(v + (255 - v) * k) for v in c)
 
 
 # ---------------- branding sprites ----------------
@@ -280,21 +326,88 @@ def _lower_third(brand, s, accent, rtl=False):
     return card
 
 
-def _title_lines(text, s, W, accent):
-    f = fit_font(text, "Poppins", 700, int(68 * s), W * 1.7)
+def _title_lines(text, s, W, accent, kind="classic"):
+    """Opening title sprites in one of the title designs."""
+    size = {"big": 104, "boxed": 74, "underline": 72}.get(kind, 68)
+    f = fit_font(text, "Poppins", 700, int(size * s), W * 1.7)
     words, lines, cur = text.split(), [], ""
+    lim = W * (0.86 if kind == "big" else 0.82)
     for w in words:
-        if f.getlength((cur + " " + w).strip()) > W * 0.82 and cur: lines.append(cur); cur = w
+        if f.getlength((cur + " " + w).strip()) > lim and cur: lines.append(cur); cur = w
         else: cur = (cur + " " + w).strip()
     if cur: lines.append(cur)
+    lines = lines[:4 if kind == "big" else 3]
     out = []
-    for i, ln in enumerate(lines[:3]):
-        t = text_sprite(ln, f, (255, 255, 255) if i else (255, 255, 255), pad=0)
+    if kind == "boxed":  # one solid block
+        ts = [text_sprite(ln, f, (255, 255, 255), pad=0) for ln in lines]
+        pw = max(t.shape[1] for t in ts) + int(70 * s); ph = sum(t.shape[0] for t in ts) + int(14 * s) * (len(ts) - 1) + int(56 * s)
+        c = np.zeros((ph, pw, 4), np.uint8); c[..., :3] = accent; c[..., 3] = rounded_mask(pw, ph, int(26 * s))
+        cv2.rectangle(c, (int(26 * s), ph - int(18 * s)), (pw - int(26 * s), ph - int(12 * s)), (255, 255, 255, 200), -1)
+        yy = int(26 * s)
+        for t in ts: blit(c, t, (pw - t.shape[1]) / 2, yy); yy += t.shape[0] + int(14 * s)
+        return [c]
+    for i, ln in enumerate(lines):
+        if kind in ("big", "underline"):  # bare words with a soft shadow; the first line in the accent colour for 'big'
+            col = accent if (kind == "big" and i == 0) else (255, 255, 255)
+            out.append(text_sprite(ln.upper() if kind == "big" and not K.is_ar(ln) else ln, f, col, stroke=int(3 * s) if kind == "big" else 0, shadow=max(3, int(7 * s))))
+            continue
+        t = text_sprite(ln, f, (255, 255, 255), pad=0)
         pw, ph = t.shape[1] + int(40 * s), t.shape[0] + int(26 * s)
         c = np.zeros((ph, pw, 4), np.uint8)
         c[..., :3] = accent if i == 0 else (10, 20, 38); c[..., 3] = (rounded_mask(pw, ph, int(16 * s)) * (1 if i == 0 else .9)).astype(np.uint8)
         blit(c[..., :3], t, int(20 * s), int(12 * s)); out.append(c)
     return out
+
+
+def _frame_layouts(kind):
+    """Layouts adjusted to the frame design: 'card' shows the doctor in a rounded card over the background."""
+    L = {k: dict(v) for k, v in LAYOUT.items()}
+    if kind == "card":
+        for k in ("full", "side", "labels"):
+            L[k]["doc"] = (0.045, 0.035, 0.91, 0.885); L[k]["dr"] = 0.055
+    return L
+
+
+_BG = {}
+
+
+def _background(W, H, sec, accent, kind):
+    key = (W, H, tuple(sec), tuple(accent), kind)
+    if key in _BG: return _BG[key]
+    c1 = np.array(sec, np.float32)
+    if kind == "plain":
+        img = np.ones((H, W, 3), np.float32) * c1
+    else:
+        y = np.linspace(0, 1, H, dtype=np.float32)[:, None, None]
+        img = (c1 * (1 - y * 0.55)) * np.ones((1, W, 1), np.float32)
+        yy, xx = np.mgrid[0:H:4, 0:W:4]
+        glow = cv2.resize(np.exp(-(((xx - W * .5) / (W * .6)) ** 2 + ((yy - H * .2) / (H * .3)) ** 2)).astype(np.float32), (W, H))
+        img += glow[..., None] * np.array(accent, np.float32) * 0.22
+    s = W / 1080
+    if kind == "grid":
+        step = int(64 * s); ov = img.copy()
+        for x in range(0, W, step): cv2.line(ov, (x, 0), (x, H), accent, 1)
+        for y_ in range(0, H, step): cv2.line(ov, (0, y_), (W, y_), accent, 1)
+        img = img * 0.9 + ov * 0.1
+    elif kind == "dots":
+        step = int(46 * s); ov = img.copy()
+        for y_ in range(step // 2, H, step):
+            for x in range(step // 2, W, step): cv2.circle(ov, (x, y_), max(1, int(3 * s)), (255, 255, 255), -1, cv2.LINE_AA)
+        img = img * 0.88 + ov * 0.12
+    out = np.clip(img, 0, 255).astype(np.uint8)
+    if len(_BG) > 6: _BG.clear()
+    _BG[key] = out
+    return out
+
+
+def _glitch(canvas, T, s):
+    """A few frames of digital glitch: RGB split and shifted slices."""
+    H, W = canvas.shape[:2]; rng = np.random.default_rng(int(T * 1000))
+    k = int(14 * s)
+    canvas[..., 0] = np.roll(canvas[..., 0], k, axis=1); canvas[..., 2] = np.roll(canvas[..., 2], -k, axis=1)
+    for _ in range(5):
+        y0 = int(rng.integers(0, H - 20)); h = int(rng.integers(int(10 * s), int(70 * s)))
+        canvas[y0:y0 + h] = np.roll(canvas[y0:y0 + h], int(rng.integers(-40, 40) * s), axis=1)
 
 
 def _outro(brand, W, H, T, accent, sec, logo, lang="en"):
@@ -421,7 +534,8 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
     if preview: W, H, fps = W // 2, H // 2, 24
     s = W / 1080
     G.UI_SCALE = s
-    brand = plan["branding"]; accent = hex2rgb(brand["primary"]); sec = hex2rgb(brand["secondary"])
+    brand = plan["branding"]; _acc, _sec = P.colors(plan); accent = hex2rgb(_acc); sec = hex2rgb(_sec)
+    DS = plan.get("design", {}); frame_kind = DS.get("frame", "full"); tstyle = DS.get("transition", "flash")
     try:  # never cut through a word, even when the transcript timing is a little off
         from . import analyze as AN, asr as ASR
         n = AN.snap_cuts(plan["cuts"], ASR.load_audio(plan["source"]["path"]))
@@ -490,8 +604,10 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
     logo = _logo(brand, int(150 * s), accent, sec)
     small_logo = scale_rgba(logo, (92 * s) / logo.shape[1])
     lower = _lower_third(brand, s, accent, K.is_ar(brand["name"]) or rtl) if brand.get("lower_third", True) else None
-    title = _title_lines(plan["title"]["text"], s, W, accent) if plan["title"].get("enabled") and plan["title"].get("text") else []
-    bg = np.zeros((H, W, 3), np.uint8); bg[:] = sec
+    tkind = DS.get("title", "classic")
+    title = _title_lines(plan["title"]["text"], s, W, accent, tkind) if plan["title"].get("enabled") and plan["title"].get("text") else []
+    bg = _background(W, H, sec, accent, DS.get("bg", "plain"))
+    LYL = _frame_layouts(frame_kind); LYR = {k: _mirror(v) for k, v in LYL.items()}
     presenter = plan.get("presenter", True)
     wm = text_sprite("Made with MedReel", font("Poppins", 700, int(30 * s)), (255, 255, 255), shadow=max(2, int(4 * s))) if plan["output"].get("watermark") else None
     last_doc = None; lower_y = None
@@ -514,7 +630,7 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
             ov = frame.copy(); cv2.polylines(ov, [np.stack([xs, ys], 1).astype(np.int32)], False, accent, max(2, int(4 * s)), cv2.LINE_AA)
             frame = cv2.addWeighted(ov, 0.28, frame, 0.72, 0)
         # active scene + transition mix
-        LY = LAYOUT_RTL if rtl else LAYOUT
+        LY = LYR if rtl else LYL
         lay, scn, m, ovs = LY["full"], None, 0.0, None
         for a, b, sc in scenes:
             if a - 0.001 <= T < b:
@@ -531,7 +647,7 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
         for ea, eb in emph:
             if ea <= T < eb: z *= 1 + zp["punch"] * min(ease_out_cubic((T - ea) / 0.18), ease_in_out((eb - T) / 0.3))
         fxon = plan.get("effects", {}).get("transitions", True)
-        if fxon and scn is not None:  # camera punch as a visual arrives / leaves (strength depends on the style)
+        if fxon and scn is not None and tstyle in ("flash", "glitch"):  # camera punch as a visual arrives / leaves (strength depends on the style)
             sa, sb = next((a, b) for a, b, sc in scenes if sc is scn)
             z *= 1 + 0.06 * fxk * max(np.exp(-((T - sa) / 0.18) ** 2), np.exp(-((T - sb) / 0.18) ** 2))
         canvas = bg.copy()
@@ -548,6 +664,7 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
                 kw = {"title": g["title"]} if g.get("title") else {}
                 if g["asset"] == "photo" and scn.get("caption"): kw = {"title": scn["caption"]}
                 if g.get("fill"): kw["fill"] = True
+                if g["asset"] == "gen": kw["panel_bg"] = sec
                 gfx_img = fn(max(32, int(gw)), max(32, int(gh)), gt, gd, mode=g["mode"], accent=accent, lang=glang, **kw)
         doc_full = dw >= W * 0.99 and dh >= H * 0.99
         def draw_doc():
@@ -572,12 +689,26 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
                 blit(canvas, gfx_rgba, gx, gy + (1 - m) * 60 * s, lay["ga"] * m)
                 return
             full = gw >= W * 0.99 and gh >= H * 0.99
+            img_, x_, y_, extra = gfx_img, gx, gy, None
+            if fxon and scn is not None and tstyle in ("slide", "zoom", "wipe"):
+                sa_, sb_ = next((a, b) for a, b, sc in scenes if sc is scn)
+                ph_ = min(ease_out_cubic((T - sa_) / 0.5), ease_in_out((sb_ - T) / 0.35), 1.0)
+                if tstyle == "slide":
+                    x_ += (1 - ph_) * W * 0.7 * (-1 if rtl else 1)
+                elif tstyle == "zoom" and ph_ < 0.999:
+                    k_ = 0.8 + 0.2 * ph_; nw, nh = max(8, int(img_.shape[1] * k_)), max(8, int(img_.shape[0] * k_))
+                    img_ = cv2.resize(img_, (nw, nh), interpolation=cv2.INTER_AREA)
+                    x_ += (gfx_img.shape[1] - nw) / 2; y_ += (gfx_img.shape[0] - nh) / 2; r = r * k_
+                elif tstyle == "wipe" and ph_ < 0.999:
+                    extra = np.zeros(img_.shape[:2], np.uint8)
+                    cv2.circle(extra, (img_.shape[1] // 2, img_.shape[0] // 2), int(ph_ * 0.6 * math.hypot(*img_.shape[:2])), 255, -1, cv2.LINE_AA)
             if not full and r > 0.5:
-                shadow_rect(canvas, gx, gy, gfx_img.shape[1], gfx_img.shape[0], r, 0.55, int(26 * s))
-                mask = rounded_mask(gfx_img.shape[1], gfx_img.shape[0], r)
-                blit(canvas, gfx_img, gx, gy, lay["ga"], mask)
+                shadow_rect(canvas, x_, y_, img_.shape[1], img_.shape[0], r, 0.55, int(26 * s))
+                mask = rounded_mask(img_.shape[1], img_.shape[0], r)
+                if extra is not None: mask = np.minimum(mask, extra)
+                blit(canvas, img_, x_, y_, lay["ga"], mask)
             else:
-                blit(canvas, gfx_img, gx, gy, lay["ga"])
+                blit(canvas, img_, x_, y_, lay["ga"], extra)
         if gw * gh > dw * dh: draw_gfx(); draw_doc()
         else: draw_doc(); draw_gfx()
         if scn is not None and scn["layout"] == "split" and m > 0.01:
@@ -594,10 +725,17 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
                     band = np.exp(-((pos - c_) / (0.07 * (x1_ - x0_))) ** 2) * 0.22 * min(1.3, fxk) * np.sin(np.pi * u_)
                     roi = canvas[y0_:y1_, x0_:x1_].astype(np.float32)
                     canvas[y0_:y1_, x0_:x1_] = np.clip(roi + band[..., None] * 255, 0, 255).astype(np.uint8)
-            fl = 0.30 * fxk * fxflash * np.exp(-((T - sa) / 0.07) ** 2)  # quick flash on the cut
-            if fl > 0.01: canvas[:] = np.clip(canvas.astype(np.float32) * (1 - fl) + 255 * fl, 0, 255).astype(np.uint8)
+            if tstyle == "flash":
+                fl = 0.30 * fxk * fxflash * np.exp(-((T - sa) / 0.07) ** 2)  # quick flash on the cut
+                if fl > 0.01: canvas[:] = np.clip(canvas.astype(np.float32) * (1 - fl) + 255 * fl, 0, 255).astype(np.uint8)
+            elif tstyle == "glitch" and (0 <= T - sa < 0.22 or 0 <= sb - T < 0.12):
+                _glitch(canvas, T, s)
+        if frame_kind == "border":  # thin accent frame around the whole video
+            mg = int(22 * s); cv2.rectangle(canvas, (mg, mg), (W - mg, H - mg), accent, max(2, int(5 * s)), cv2.LINE_AA)
+            for cx_, cy_ in ((mg, mg), (W - mg, mg), (mg, H - mg), (W - mg, H - mg)): cv2.circle(canvas, (cx_, cy_), int(9 * s), accent, -1, cv2.LINE_AA)
         # avoid-zones for captions: face (when visible) + floating graphic card
         avoid = []; face_box = None
+        if frame_kind == "card": avoid.append((0, 0.905, 1, 1, 6.0))  # keep subtitles inside the card
         if not presenter:
             if scn is None: avoid.append((0, 0.6, 1, 1))  # captions sit mid-screen as kinetic type
         elif lay["da"] > 0.5:
@@ -613,13 +751,20 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
             avoid.append((0, 0.12, 1, 0.80))  # main band of full-screen animations (slice, scale, scanner)
         # title (hook)
         if title and T < 3.4:
-            ty = H * 0.115
+            ty = H * (0.085 if tkind == "big" else 0.115)
+            if tkind == "big":  # darken the top so huge words read over any background
+                k_ = 0.55 * ease_out_cubic(T / 0.3) * min(1, (3.4 - T) / 0.3)
+                yb = int(H * 0.42); grad = np.linspace(1, 0, yb, dtype=np.float32)[:, None, None] * k_
+                canvas[:yb] = (canvas[:yb].astype(np.float32) * (1 - grad)).astype(np.uint8)
             for i, spr in enumerate(title):
                 a = ease_out_cubic((T - 0.15 - i * 0.12) / 0.35) * min(1, (3.4 - T) / 0.3)
-                if plan["title"]["style"] == "pop": spr2 = scale_rgba(spr, 0.7 + 0.3 * ease_out_back((T - 0.15 - i * .1) / 0.3)); dyy = 0
+                if tkind == "big":
+                    d_ = 0.1 + i * 0.09; spr2 = scale_rgba(spr, 0.6 + 0.4 * ease_out_back((T - d_) / 0.28)); dyy = 0
+                    a = clamp((T - d_) / 0.08, 0, 1) * min(1, (3.4 - T) / 0.3)
+                elif plan["title"]["style"] == "pop" or tkind == "boxed": spr2 = scale_rgba(spr, 0.7 + 0.3 * ease_out_back((T - 0.15 - i * .1) / 0.3)); dyy = 0
                 else: spr2 = spr; dyy = (1 - a) * 30 * s
-                blit(canvas, spr2, (W - spr2.shape[1]) / 2, ty + dyy, a); ty += spr.shape[0] + 10 * s
-            if plan.get("effects", {}).get("transitions", True):  # accent bar sweeps in under the title
+                blit(canvas, spr2, (W - spr2.shape[1]) / 2, ty + dyy + (spr.shape[0] - spr2.shape[0]) / 2, a); ty += spr.shape[0] + 10 * s
+            if plan.get("effects", {}).get("transitions", True) and tkind in ("classic", "underline", "big"):  # accent bar sweeps in under the title
                 bw_ = int(W * 0.34 * ease_out_cubic((T - 0.45) / 0.4) * min(1, (3.4 - T) / 0.3))
                 if bw_ > 4: cv2.rectangle(canvas, (int((W - bw_) / 2), int(ty + 4 * s)), (int((W + bw_) / 2), int(ty + 12 * s)), accent, -1)
                 ty += 16 * s

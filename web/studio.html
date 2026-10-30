@@ -89,6 +89,8 @@ details summary{cursor:pointer;font-weight:600;margin:10px 0;color:var(--ink)}
 .legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--mut);margin-top:6px}.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 /* words / look */
 .words{line-height:2.1}.w{padding:2px 3px;border-radius:5px;cursor:pointer}.w:hover{background:#fbeef0}.w.cut{color:#b9a9ac;text-decoration:line-through}.w.kw{color:var(--acc2);font-weight:600}.w.ed{background:#e9f8f1}
+.sty .sw{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:7px;vertical-align:0}
+.pals{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.pal{width:34px;height:34px;border-radius:50%;border:3px solid #fff;outline:1px solid var(--line);cursor:pointer;color:#fff;font-size:14px;overflow:hidden}.pal.on{outline:3px solid var(--ink)}
 .styles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
 .sty{border:2px solid var(--line);border-radius:12px;padding:10px;cursor:pointer;background:#fff;text-align:left}.sty.on{border-color:var(--acc);background:var(--soft)}.sty b{display:block}.sty small{color:var(--mut)}
 .ask{display:flex;gap:8px}.ask input{flex:1;padding:11px 13px;border:1px solid var(--line);border-radius:12px;font-size:15px}
@@ -368,7 +370,21 @@ function renderWords(){
 /* ======================= LOOK ======================= */
 function renderLook(){
   const b=P.branding,fx=P.effects||{transitions:true,sfx:true};
-  $('#tab-look').innerHTML=`<h3 style="margin-top:0">Editing style</h3><div class="styles">${Object.entries(META.styles).map(([k,v])=>`<button class="sty ${k===P.style?'on':''}" data-sty="${k}"><b>${esc(v)}</b><small>${STY_DESC[k]||''}</small></button>`).join('')}</div>
+  const D=P.design||{},pal=D.palette||'brand',sel=(id,opts,cur)=>`<select id="${id}">${Object.entries(opts).map(([k,v])=>`<option value="${k}" ${k===cur?'selected':''}>${esc(typeof v==='string'?v:v.label)}</option>`).join('')}</select>`;
+  $('#tab-look').innerHTML=`<div style="display:flex;align-items:center;gap:10px;margin-top:0"><h3 style="margin:0;flex:1">Look</h3><button class="btn sm pri" id="lkRand">🎲 Surprise me</button></div>
+    <p class="mini" style="margin:4px 0 10px">Each look changes colours, subtitles, frame, transitions, title, music and pace together. Fine-tune any part below.</p>
+    <div class="styles">${Object.entries(META.looks||{}).map(([k,v])=>`<button class="sty ${k===D.look?'on':''}" data-look="${k}"><b><i class="sw" style="background:${(META.palettes[v.palette]||{}).accent}"></i>${esc(v.label)}</b><small>${esc(v.desc)}</small></button>`).join('')}</div>
+    <h3>Fine-tune</h3>
+    <div class="mini" style="margin-bottom:6px">Colours</div>
+    <div class="pals">${Object.entries(META.palettes).map(([k,v])=>`<button class="pal ${k===pal?'on':''}" data-pal="${k}" title="${esc(v.label)}" style="background:${k==='brand'?(P.branding.primary||'#2EA0FF'):v.accent};box-shadow:inset 0 -10px 0 ${k==='brand'?(P.branding.secondary||'#0B1730'):v.bg}">${k==='brand'?'★':''}</button>`).join('')}<span class="mini" id="palName">${esc((META.palettes[pal]||{}).label||'')}</span></div>
+    <div class="grid2" style="margin-top:10px">
+      <label class="f">Subtitles${sel('dCap',META.caption_looks,P.captions.style)}</label>
+      <label class="f">How pictures appear${sel('dTr',META.transitions,D.transition||'flash')}</label>
+      <label class="f">Video frame${sel('dFr',META.frames,D.frame||'full')}</label>
+      <label class="f">Opening title design${sel('dTi',META.titles,D.title||'classic')}</label>
+      <label class="f">Background${sel('dBg',META.backgrounds,D.bg||'plain')}</label>
+      <label class="f">Pace, colour grade & music${sel('dSty',META.styles,P.style)}</label>
+    </div>
     <h3>Motion & sound</h3>
     <div class="row"><div class="grow"><b>Motion graphics</b><div class="mini">Flash and camera punch when a visual appears, light sweep, animated title bar</div></div><label class="sw"><input type="checkbox" id="fxT" ${fx.transitions!==false?'checked':''}><span></span></label></div>
     <div class="row"><div class="grow"><b>Sound effects</b><div class="mini">Whooshes on scene changes, soft pops on icons and keywords</div></div><label class="sw"><input type="checkbox" id="fxS" ${fx.sfx!==false?'checked':''}><span></span></label></div>
@@ -380,7 +396,15 @@ function renderLook(){
     <details><summary>Name card, colours & end card</summary><div class="grid2">${BRAND_FIELDS.map(([k,l,t])=>`<label class="f">${l}<input data-pb="${k}" type="${t||'text'}" value="${esc(b[k]||'')}"></label>`).join('')}
       <label class="f" style="grid-column:1/-1">Disclaimer on the end card<input data-pb="disclaimer" value="${esc(b.disclaimer||'')}"></label></div><button class="btn sm" id="saveBrand" style="margin-top:10px">Save branding</button></details>
     <details><summary>Delete this video</summary><button class="btn" style="color:var(--bad)" id="delBtn">Delete the recording, renders and edits</button></details>`;
-  $$('[data-sty]').forEach(x=>x.onclick=()=>ops([{op:'set_style',style:x.dataset.sty}]));
+  $$('[data-look]').forEach(x=>x.onclick=()=>ops([{op:'set_look',look:x.dataset.look}]));
+  $('#lkRand').onclick=()=>ops([{op:'set_look',look:'surprise'}]);
+  $$('[data-pal]').forEach(x=>x.onclick=()=>ops([{op:'set_design',palette:x.dataset.pal}]));
+  $('#dCap').onchange=e=>ops([{op:'set_caption_style',style:e.target.value}]);
+  $('#dTr').onchange=e=>ops([{op:'set_design',transition:e.target.value}]);
+  $('#dFr').onchange=e=>ops([{op:'set_design',frame:e.target.value}]);
+  $('#dTi').onchange=e=>ops([{op:'set_design',title:e.target.value}]);
+  $('#dBg').onchange=e=>ops([{op:'set_design',bg:e.target.value}]);
+  $('#dSty').onchange=e=>ops([{op:'set_style',style:e.target.value}]);
   $('#fxT').onchange=e=>ops([{op:'set_effects',transitions:e.target.checked}]);
   $('#fxS').onchange=e=>ops([{op:'set_effects',sfx:e.target.checked}]);
   $('#sMus').onchange=e=>{stopSample();ops([{op:'set_music',track:e.target.value}])};

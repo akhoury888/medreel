@@ -436,10 +436,10 @@ def load(scene_id):
     return _load(p, os.path.getmtime(p)) if os.path.exists(p) else None
 
 
-def render_scene(scene, W, H, t, D, accent=(46, 160, 255), lang="en", title=None):
+def render_scene(scene, W, H, t, D, accent=(46, 160, 255), lang="en", title=None, panel_bg=None):
     u = clamp(t / max(D, 0.1), 0, 1)
     f = 1.0; w, h = max(64, int(W * f)), max(64, int(H * f))  # full resolution: sharp edges, no upscaling blur
-    img = _bg(w, h, scene.get("bg", "dark")).copy()
+    img = (_bg_from(w, h, tuple(int(v) for v in panel_bg), tuple(int(v) for v in accent)) if panel_bg is not None else _bg(w, h, scene.get("bg", "dark"))).copy()
     glow = np.zeros((h, w, 3), np.float32)
     portrait = H > W * 1.3
     side = min(w, h) * (0.98 if not portrait else 1.0)
@@ -473,11 +473,23 @@ def render_scene(scene, W, H, t, D, accent=(46, 160, 255), lang="en", title=None
     return out
 
 
-def gen(W, H, t, D, mode="", accent=(46, 160, 255), title=None, lang="en", **_):
+def gen(W, H, t, D, mode="", accent=(46, 160, 255), title=None, lang="en", panel_bg=None, **_):
     sc = load(mode)
     if sc is None:
         img = np.zeros((H, W, 3), np.uint8); img[:] = (14, 22, 40); return img
-    return render_scene(sc, W, H, t, D, accent, lang)
+    return render_scene(sc, W, H, t, D, accent, lang, panel_bg=panel_bg)
+
+
+@functools.lru_cache(maxsize=8)
+def _bg_from(w, h, sec, accent):
+    """The video's colour palette as the animation background (dark, with a soft accent glow)."""
+    c = np.array(sec, np.float32)
+    if c.mean() > 90: c = c * 0.35  # keep it dark enough for glowing art
+    top, bot = tuple(int(v) for v in np.clip(c * 1.25 + 6, 0, 255)), tuple(int(v) for v in c * 0.55)
+    img = G._bg(w, h, top, bot).astype(np.float32)
+    yy, xx = np.mgrid[0:h:4, 0:w:4]
+    glow = cv2.resize(np.exp(-(((xx - w * .5) / (w * .55)) ** 2 + ((yy - h * .45) / (h * .4)) ** 2)).astype(np.float32), (w, h))
+    return np.clip(img + glow[..., None] * np.array(accent, np.float32) * 0.10, 0, 255).astype(np.uint8)
 
 
 G.ASSETS["gen"] = gen

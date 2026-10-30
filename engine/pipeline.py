@@ -85,6 +85,10 @@ def _stock(plan, d, p, ai_budget=None, visuals=None):
     What was actually made is recorded in plan["ai_usage"] for billing."""
     from . import broll, imagegen
     v = visuals or {}
+    lk = v.get("look")
+    if lk:  # the design: a named Look, or a different one for every video
+        if lk == "surprise" or lk not in P.LOOKS: lk = P.pick_look(avoid=v.get("avoid_looks") or [])
+        P.apply_look(plan, lk, keep_brand=bool(v.get("keep_brand")))
     mode = v.get("mode") or ("ai" if imagegen.available() else "basic")
     plan["visuals"] = {"mode": mode, "stock": bool(v.get("stock"))}
     plan["ai_usage"] = {"image": 0, "animation": 0}

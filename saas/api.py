@@ -67,7 +67,10 @@ def music_sample(track):
 def meta():
     from engine import planner, graphics, pipeline, synth
     return jsonify({"styles": {k: v["label"] for k, v in planner.STYLES.items()}, "layouts": planner.LAYOUTS,
-                    "captions": planner.CAPTION_STYLES, "music": planner.MUSIC_TRACKS, "assets": graphics.ASSET_INFO,
+                    "captions": planner.CAPTION_STYLES, "caption_looks": planner.CAPTION_LOOKS,
+                    "looks": {k: {"label": v["label"], "desc": v["desc"], "palette": v["palette"], "captions": v["captions"]} for k, v in planner.LOOKS.items()},
+                    "palettes": {k: {"label": v[0], "accent": v[1], "bg": v[2]} for k, v in planner.PALETTES.items()},
+                    "frames": planner.FRAMES, "transitions": planner.TRANSITIONS, "titles": planner.TITLES, "backgrounds": planner.BACKGROUNDS, "music": planner.MUSIC_TRACKS, "assets": graphics.ASSET_INFO,
                     "brand_defaults": planner.DEFAULT_BRAND, "modes": pipeline.MODES,
                     "voices": {l: synth.available(l) for l in ("en", "fr", "ar")},
                     "ai_scripts": bool(os.environ.get("ANTHROPIC_API_KEY")), "stock": _stock_credit(), "ai_images": bool(os.environ.get("FAL_KEY")), "gen_anims": bool(os.environ.get("ANTHROPIC_API_KEY")), "models_ready": jobs.models_ready(),
@@ -147,6 +150,9 @@ def create_project():
     vis = f.get("visuals") if f.get("visuals") in ("ai", "own", "basic") else None
     payload["visuals"] = {"mode": vis, "stock": f.get("stock") == "1"}
     if f.get("animations", "").isdigit(): payload["visuals"]["animations"] = min(4, int(f["animations"]))
+    look = f.get("look", "surprise")
+    payload["visuals"]["look"] = look if (look in planner.LOOKS or look == "surprise") else "surprise"
+    payload["visuals"]["keep_brand"] = f.get("keep_brand") == "1"
     own = []
     for ph in request.files.getlist("photos")[:20]:
         pid_, err = _save_photo(p.dir, ph)
