@@ -94,7 +94,8 @@ def _stock(plan, d, p, ai_budget=None, visuals=None):
         p(0.76, "Designing medical animations for your key points…")
         try:
             import time as _tg; t_g = _tg.time()
-            k = motion.auto(plan, d, n_gen)
+            want_imgs = mode == "ai" and imagegen.available() and (ai_budget is None or ai_budget["credits"] >= ai_budget["image"])
+            k = motion.auto(plan, d, n_gen, reserve=1 if want_imgs else 0)
             _plog.info("AI-designed animations: %d in %.0fs", k, _tg.time() - t_g)
         except Exception: _plog.exception("AI animations")
     if mode == "own":

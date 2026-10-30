@@ -438,7 +438,7 @@ def load(scene_id):
 
 def render_scene(scene, W, H, t, D, accent=(46, 160, 255), lang="en", title=None):
     u = clamp(t / max(D, 0.1), 0, 1)
-    f = 0.5; w, h = max(64, int(W * f)), max(64, int(H * f))
+    f = 1.0; w, h = max(64, int(W * f)), max(64, int(H * f))  # full resolution: sharp edges, no upscaling blur
     img = _bg(w, h, scene.get("bg", "dark")).copy()
     glow = np.zeros((h, w, 3), np.float32)
     portrait = H > W * 1.3
@@ -457,9 +457,12 @@ def render_scene(scene, W, H, t, D, accent=(46, 160, 255), lang="en", title=None
         elif e["type"] == "path": _path(ctx, e, a, grow)
         elif e["type"] == "pulse": _pulse(ctx, e, a)
     if glow.max() > 0:
-        g = cv2.GaussianBlur(glow, (0, 0), max(2, w * 0.018))
+        q = 4  # glow is soft by nature: blur it at quarter size (fast), then bring it back up
+        gs = cv2.resize(glow, (max(8, w // q), max(8, h // q)), interpolation=cv2.INTER_AREA)
+        gs = cv2.GaussianBlur(gs, (0, 0), max(1.5, w * 0.018 / q))
+        g = cv2.resize(gs, (w, h), interpolation=cv2.INTER_LINEAR)
         img = np.clip(img.astype(np.float32) + g * 0.9, 0, 255).astype(np.uint8)
-    out = cv2.resize(img, (W, H), interpolation=cv2.INTER_CUBIC)
+    out = img if (w, h) == (W, H) else cv2.resize(img, (W, H), interpolation=cv2.INTER_CUBIC)
     s = max(W / 1080, 0.8 * G.UI_SCALE)
     K = k / f
     _overlays(out, scene, [e for e in elems if e["type"] in ("arrow", "label", "counter")], u, t, accent, K, ox / f, oy / f, s, lang)
@@ -516,7 +519,10 @@ Rules:
 3. At most 3 labels visible at the same time, 1-4 words each, in the SAME language as the doctor's sentence (Arabic stays Arabic).
    Labels must not overlap each other or cover the main subject; put them in empty space and use point_to.
 4. Leave the top 140 units free (a title chip sits there). No gore, no frightening imagery, no real people, no brand names.
-5. Return ONLY the JSON object, no explanation, no markdown."""
+5. Make it look premium: 12-25 elements; a large clear main subject; supporting context drawn behind it (faint shapes with
+   opacity 0.25-0.5, e.g. surrounding tissue, a body outline, cells); glow on the important thing; colours from the palette;
+   smooth motion with several keyframes (things grow, flow, pulse, change colour) rather than objects just appearing.
+6. Return ONLY the compact JSON object (no spaces needed), no explanation, no markdown."""
 
 EXAMPLE = {"title": "Asthma attack", "bg": "dark", "elements": [
     {"type": "tube", "id": "air", "points": [[110, 560], [330, 520], [560, 560], [880, 500]], "width": 190, "wall": "airway", "lumen": "#3a1424",
@@ -636,7 +642,7 @@ def create_for_sentence(plan, project_dir, i, idea=""):
     return save(sc, project_dir, acc, lang), sc["title"]
 
 
-def auto(plan, project_dir, n=2):
+def auto(plan, project_dir, n=2, reserve=0):
     """Add up to n AI-designed animations to a new video, on sentences no other visual uses. -> number added."""
     if not available() or n <= 0: return 0
     import concurrent.futures as cf
@@ -646,7 +652,9 @@ def auto(plan, project_dir, n=2):
     busy = [(s["start"], s["end"]) for s in plan["scenes"] if s["graphic"]["asset"] not in ("icons",)]
     free = [(i, s["text"]) for i, s in enumerate(sents) if s["end"] - s["start"] >= 1.2 and s["start"] > (3.5 if presenter else 1.0)
             and not any(a < s["end"] - 0.3 and b > s["start"] + 0.3 for a, b in busy)]
-    log.info("AI animations: %d free sentence(s) to choose from", len(free))
+    log.info("AI animations: %d free sentence(s) to choose from (keeping %d for AI images)", len(free), reserve)
+    if reserve and len(free) > 1:  # leave moments for the AI illustrations so the video always gets a mix
+        n = max(1, min(n, len(free) - reserve))
     if not free:
         _note(plan, "No free moment was left for an AI-designed animation — add one from the storyboard (click a sentence)."); return 0
     try:
