@@ -89,6 +89,12 @@ def _stock(plan, d, p, ai_budget=None, visuals=None):
     if lk:  # the design: a named Look, or a different one for every video
         if lk == "surprise" or lk not in P.LOOKS: lk = P.pick_look(avoid=v.get("avoid_looks") or [])
         P.apply_look(plan, lk, keep_brand=bool(v.get("keep_brand")))
+    dz = v.get("design") or {}  # the doctor's own fine-tuning on the New video page
+    for k in P.DESIGN_FIELDS:
+        if dz.get(k) in P.DESIGN_FIELDS[k]: plan.setdefault("design", {})[k] = dz[k]
+    if dz.get("captions") in P.CAPTION_LOOKS: plan["captions"]["style"] = dz["captions"]
+    if dz.get("music") in P.MUSIC_TRACKS: plan["music"].update({"track": dz["music"], "enabled": True})
+    elif dz.get("music") == "off": plan["music"]["enabled"] = False
     mode = v.get("mode") or ("ai" if imagegen.available() else "basic")
     plan["visuals"] = {"mode": mode, "stock": bool(v.get("stock"))}
     plan["ai_usage"] = {"image": 0, "animation": 0}

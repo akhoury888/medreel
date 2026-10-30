@@ -62,13 +62,41 @@ def music_sample(track):
     return send_from_directory(d, name, mimetype="audio/mp4", max_age=86400)
 
 
+@bp.post("/api/design_preview")
+@login_required
+def design_preview():
+    """A short example clip of the chosen design, rendered by the real engine (cached)."""
+    from engine import preview
+    from .jobs import _brand_for
+    u = current_user(); f = request.form
+    opts = {k: (f.get(k) or "")[:40] for k in ("look", "palette", "captions", "frame", "transition", "title", "bg", "music", "lang")}
+    opts["title_text"] = (f.get("title_text") or "")[:60]; opts["presenter"] = f.get("presenter", "1") != "0"; opts["keep_brand"] = f.get("keep_brand") == "1"
+    frame = None
+    up = request.files.get("frame")
+    if up:
+        data = up.read(3_000_000)
+        frame = preview.frame_from_upload(data) if data else None
+        if frame is not None and opts["presenter"]:
+            fb = preview.face_box(frame)
+            if fb: opts["face"] = [round(v, 3) for v in fb]
+    if not opts["presenter"]: frame = None
+    b = _brand_for(u, u.effective_plan())
+    brand = {k: b.get(k) for k in ("name", "specialty", "clinic", "primary", "secondary", "logo") if b.get(k)}
+    try:
+        path = preview.make(opts, os.path.join(C.STORAGE_DIR, "_previews"), frame, brand)
+    except Exception as e:
+        abort(500, f"Preview failed ({str(e)[:80]}).")
+    return send_from_directory(os.path.dirname(path), os.path.basename(path), mimetype="video/mp4", max_age=3600)
+
+
 @bp.get("/api/meta")
 @login_required
 def meta():
     from engine import planner, graphics, pipeline, synth
     return jsonify({"styles": {k: v["label"] for k, v in planner.STYLES.items()}, "layouts": planner.LAYOUTS,
                     "captions": planner.CAPTION_STYLES, "caption_looks": planner.CAPTION_LOOKS,
-                    "looks": {k: {"label": v["label"], "desc": v["desc"], "palette": v["palette"], "captions": v["captions"]} for k, v in planner.LOOKS.items()},
+                    "looks": {k: {**{f: v[f] for f in ("label", "desc", "palette", "captions", "frame", "transition", "title", "bg")}, "music": planner.STYLES[v["style"]]["music"]} for k, v in planner.LOOKS.items()},
+                    "music": planner.MUSIC_TRACKS,
                     "palettes": {k: {"label": v[0], "accent": v[1], "bg": v[2]} for k, v in planner.PALETTES.items()},
                     "frames": planner.FRAMES, "transitions": planner.TRANSITIONS, "titles": planner.TITLES, "backgrounds": planner.BACKGROUNDS, "music": planner.MUSIC_TRACKS, "assets": graphics.ASSET_INFO,
                     "brand_defaults": planner.DEFAULT_BRAND, "modes": pipeline.MODES,
@@ -153,6 +181,11 @@ def create_project():
     look = f.get("look", "surprise")
     payload["visuals"]["look"] = look if (look in planner.LOOKS or look == "surprise") else "surprise"
     payload["visuals"]["keep_brand"] = f.get("keep_brand") == "1"
+    from engine import planner as _P
+    dz = {k: f.get("d_" + k) for k in _P.DESIGN_FIELDS if f.get("d_" + k) in _P.DESIGN_FIELDS[k]}
+    if f.get("d_captions") in _P.CAPTION_LOOKS: dz["captions"] = f["d_captions"]
+    if f.get("d_music") in _P.MUSIC_TRACKS + ["off"]: dz["music"] = f["d_music"]
+    if dz: payload["visuals"]["design"] = dz
     own = []
     for ph in request.files.getlist("photos")[:20]:
         pid_, err = _save_photo(p.dir, ph)

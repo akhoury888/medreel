@@ -527,11 +527,12 @@ def _ambient(w, h, T, accent, sec):
 
 
 # ---------------- main render ----------------
-def render(plan, out_path, workdir, preview=False, progress=None, log=print):
+def render(plan, out_path, workdir, preview=False, progress=None, log=print, size=None):
     t_start = time.time()
     os.makedirs(workdir, exist_ok=True)
     W, H, fps = plan["output"]["width"], plan["output"]["height"], plan["output"]["fps"]
     if preview: W, H, fps = W // 2, H // 2, 24
+    if size: W, H, fps = size
     s = W / 1080
     G.UI_SCALE = s
     brand = plan["branding"]; _acc, _sec = P.colors(plan); accent = hex2rgb(_acc); sec = hex2rgb(_sec)
@@ -640,6 +641,9 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
                 scn = sc; lt = sc["layout"] if sc["layout"] in LAYOUT else "side"
                 m = ease_in_out(min((T - a) / tr, (b - T) / tr, 1.0))
                 lay = _lerp_layout(LY["full"], LY[lt], m)
+                if tstyle in ("slide", "zoom", "wipe", "glitch") and plan.get("effects", {}).get("transitions", True) and LY[lt]["ga"] > 0:
+                    # the transition itself brings the picture in: it sits at its final place, fully opaque
+                    lay["gfx"], lay["gr"], lay["ga"] = LY[lt]["gfx"], LY[lt]["gr"], 1.0
         # zoom: alternate per jump-cut segment + slow push + keyword punch
         seg_a, seg_b = keeps[seg]; seg_out0 = tl.offsets[seg]
         z = 1 + (zp["intensity"] if seg % 2 and presenter else 0)
@@ -692,16 +696,25 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
             img_, x_, y_, extra = gfx_img, gx, gy, None
             if fxon and scn is not None and tstyle in ("slide", "zoom", "wipe"):
                 sa_, sb_ = next((a, b) for a, b, sc in scenes if sc is scn)
-                ph_ = min(ease_out_cubic((T - sa_) / 0.5), ease_in_out((sb_ - T) / 0.35), 1.0)
-                if tstyle == "slide":
-                    x_ += (1 - ph_) * W * 0.7 * (-1 if rtl else 1)
-                elif tstyle == "zoom" and ph_ < 0.999:
-                    k_ = 0.8 + 0.2 * ph_; nw, nh = max(8, int(img_.shape[1] * k_)), max(8, int(img_.shape[0] * k_))
-                    img_ = cv2.resize(img_, (nw, nh), interpolation=cv2.INTER_AREA)
-                    x_ += (gfx_img.shape[1] - nw) / 2; y_ += (gfx_img.shape[0] - nh) / 2; r = r * k_
-                elif tstyle == "wipe" and ph_ < 0.999:
-                    extra = np.zeros(img_.shape[:2], np.uint8)
-                    cv2.circle(extra, (img_.shape[1] // 2, img_.shape[0] // 2), int(ph_ * 0.6 * math.hypot(*img_.shape[:2])), 255, -1, cv2.LINE_AA)
+                e_in, e_out = clamp((T - sa_) / 0.55, 0, 1), clamp((sb_ - T) / 0.4, 0, 1)
+                leaving = e_out < e_in
+                if tstyle == "slide":  # in from one side, out the other
+                    d_ = -1 if rtl else 1
+                    x_ += (W * 1.05 * d_ * (1 - ease_out_cubic(e_in))) if not leaving else (-W * 1.05 * d_ * (1 - ease_in_out(e_out)))
+                elif tstyle == "zoom":  # grows from small with a little bounce, shrinks away
+                    k_ = ease_out_back(e_in) if not leaving else ease_in_out(e_out)
+                    k_ = max(0.04, min(1.08, k_))
+                    if abs(k_ - 1) > 1e-3:
+                        nw, nh = max(8, int(img_.shape[1] * k_)), max(8, int(img_.shape[0] * k_))
+                        img_ = cv2.resize(img_, (nw, nh), interpolation=cv2.INTER_AREA if k_ < 1 else cv2.INTER_LINEAR)
+                        x_ += (gfx_img.shape[1] - nw) / 2; y_ += (gfx_img.shape[0] - nh) / 2; r = r * k_
+                elif tstyle == "wipe":  # a circle opens from the centre, closes at the end
+                    ph_ = ease_in_out(min(e_in, e_out))
+                    if ph_ < 0.999:
+                        extra = np.zeros(img_.shape[:2], np.uint8)
+                        cv2.circle(extra, (img_.shape[1] // 2, img_.shape[0] // 2), int(ph_ * 0.56 * math.hypot(*img_.shape[:2])), 255, -1, cv2.LINE_AA)
+                        if ph_ > 0.02:
+                            cv2.circle(canvas, (int(x_ + img_.shape[1] / 2), int(y_ + img_.shape[0] / 2)), int(ph_ * 0.56 * math.hypot(*img_.shape[:2])) + int(4 * s), accent, max(2, int(6 * s)), cv2.LINE_AA)
             if not full and r > 0.5:
                 shadow_rect(canvas, x_, y_, img_.shape[1], img_.shape[0], r, 0.55, int(26 * s))
                 mask = rounded_mask(img_.shape[1], img_.shape[0], r)
@@ -728,7 +741,7 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
             if tstyle == "flash":
                 fl = 0.30 * fxk * fxflash * np.exp(-((T - sa) / 0.07) ** 2)  # quick flash on the cut
                 if fl > 0.01: canvas[:] = np.clip(canvas.astype(np.float32) * (1 - fl) + 255 * fl, 0, 255).astype(np.uint8)
-            elif tstyle == "glitch" and (0 <= T - sa < 0.22 or 0 <= sb - T < 0.12):
+            elif tstyle == "glitch" and (0 <= T - sa < 0.32 or 0 <= sb - T < 0.18):
                 _glitch(canvas, T, s)
         if frame_kind == "border":  # thin accent frame around the whole video
             mg = int(22 * s); cv2.rectangle(canvas, (mg, mg), (W - mg, H - mg), accent, max(2, int(5 * s)), cv2.LINE_AA)

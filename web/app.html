@@ -134,6 +134,15 @@ label.f .hint{display:block;font-weight:400;color:var(--steel);font-size:13px;ma
 .opt svg{width:40px;height:40px}
 .opt b{font-family:var(--display);font-size:19px;line-height:1.15}
 .opt span{font-size:14px;color:var(--steel)}
+.dz{display:grid;grid-template-columns:300px 1fr;gap:26px;align-items:start}
+.pvwrap{position:sticky;top:84px}.pvphone{position:relative;width:300px;aspect-ratio:9/16;background:#0b1730;border-radius:28px;padding:8px;box-shadow:0 18px 40px rgba(11,23,48,.22);overflow:hidden}
+.pvphone video{width:100%;height:100%;object-fit:cover;border-radius:21px;display:block;background:#0b1730}
+.pvload{position:absolute;inset:8px;border-radius:21px;background:rgba(11,23,48,.55);color:#fff;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;font-weight:600;font-size:14px}
+.pvload.hide{display:none}.spin{width:26px;height:26px;border:3px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:sp 0.8s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
+.pvsnd{position:absolute;right:16px;bottom:16px;border:0;border-radius:50%;width:38px;height:38px;background:rgba(0,0,0,.55);color:#fff;font-size:17px;cursor:pointer}
+.pvtag{position:absolute;left:16px;bottom:18px;background:rgba(0,0,0,.55);color:#fff;font-size:11px;font-weight:700;padding:4px 9px;border-radius:20px}
+.pals{display:flex;gap:8px;flex-wrap:wrap}.pal{width:36px;height:36px;border-radius:50%;border:3px solid #fff;outline:1px solid var(--line);cursor:pointer;color:#fff;font-size:14px;padding:0}.pal[aria-pressed=true]{outline:3px solid var(--ink)}
+@media(max-width:820px){.dz{grid-template-columns:1fr}.pvwrap{position:static}.pvphone{margin:auto;width:min(300px,80vw)}}
 .chip .sw{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:0}
 .choose.vis{grid-template-columns:repeat(3,1fr)}.vcost{font-style:normal;font-size:12px;font-weight:700;color:var(--red,#C8233A)}
 .phlist{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.phlist div{position:relative}.phlist img{width:70px;height:70px;object-fit:cover;border-radius:10px;display:block}
@@ -327,8 +336,6 @@ textarea.script{min-height:220px;line-height:1.6;resize:vertical}
       <label class="f" style="margin-top:0">Title <span class="muted" style="font-weight:400">(optional)</span><input id="nTitle" placeholder="e.g. What is a calcium score?"></label>
       <label class="f" style="margin-top:0">Language of the video<select id="nLang"><option value="auto">Detect from my voice</option><option value="ar">Arabic (Lebanese)</option><option value="en">English</option><option value="fr">French</option></select></label>
     </div>
-    <label class="f">Look of the video</label><div class="chips" id="nStyles" role="group" aria-label="Look"></div>
-    <label class="small" style="display:block;margin-top:8px"><input type="checkbox" id="nBrand"> Always use my brand colours</label>
   </div>
 
   <div class="panel hide" id="pScript">
@@ -399,6 +406,30 @@ textarea.script{min-height:220px;line-height:1.6;resize:vertical}
   </div>
 
   <div class="notice hide" id="aiNote">Narration uses a generic AI voice (male in English and Arabic, female in French), never a copy of your voice. The end card says “AI voice”, which Instagram and TikTok expect for synthetic audio.</div>
+  <div class="panel" id="pDesign">
+    <h3>Design</h3>
+    <p class="muted small" style="margin:4px 0 14px" id="dzHint">Pick a look, then change anything you like. The example shows exactly what each choice does — add your video above and it uses your own image.</p>
+    <div class="dz">
+      <div class="pvwrap"><div class="pvphone"><video id="pvVid" autoplay muted loop playsinline></video><div class="pvload" id="pvLoad"><span class="spin"></span>Preparing the preview…</div>
+        <button type="button" class="pvsnd" id="pvSnd" title="Sound">🔇</button><span class="pvtag" id="pvTag">Example</span></div>
+        <p class="muted small" style="text-align:center;margin-top:8px">Loops every 7 seconds · tap 🔇 to hear the music</p></div>
+      <div class="dzopts">
+        <label class="f" style="margin-top:0">Look</label><div class="chips" id="nStyles" role="group" aria-label="Look"></div>
+        <label class="small" style="display:block;margin-top:8px"><input type="checkbox" id="nBrand"> Always use my brand colours</label>
+        <label class="f">Colours</label><div class="pals" id="dPal"></div>
+        <div class="row2">
+          <label class="f">Subtitles<select id="dCap" data-k="captions"></select></label>
+          <label class="f">How pictures appear<select id="dTr" data-k="transition"></select></label>
+          <label class="f">Video frame<select id="dFr" data-k="frame"></select></label>
+          <label class="f">Opening title<select id="dTi" data-k="title"></select></label>
+          <label class="f">Background<select id="dBg" data-k="bg"></select></label>
+          <label class="f">Music<span style="display:flex;gap:8px"><select id="dMus" data-k="music" style="flex:1"></select><button type="button" class="btn" id="dListen" style="padding:8px 12px">▶</button></span></label>
+        </div>
+        <button type="button" class="btn" id="dReset" style="margin-top:14px">↺ Back to the look's settings</button>
+      </div>
+    </div>
+  </div>
+
   <div class="err hide" id="newErr"></div>
   <div style="display:flex;gap:12px;align-items:center;margin-top:22px;flex-wrap:wrap"><button class="btn red" id="makeBtn" type="button">Make my video</button><span class="muted small">Your original recording is never modified.</span></div>
   <div class="status hide" id="status"><h3 id="stT">Uploading…</h3><div class="bar"><i id="stBar"></i></div><p class="muted" id="stMsg"></p></div>
@@ -545,10 +576,7 @@ async function newView(){
   if(window.META_MODELS_PENDING===undefined){api('/api/meta').then(m=>{if(!m.models_ready){$('#newQuota').insertAdjacentHTML('beforebegin','<div class="mini" style="margin-bottom:8px;padding:10px;border:1px solid var(--line);border-radius:10px">⏳ First start: the speech models are still downloading (about 4 GB, once). You can upload now — your video will start processing automatically when the download finishes.</div>')}}).catch(()=>{});window.META_MODELS_PENDING=1}
   $('#newQuota').innerHTML=left>0?`${left} of ${ME.usage.limit} videos left this month.`:`You've used all ${ME.usage.limit} videos this month. <a href="#/billing">Upgrade your plan</a> to make more.`;
   $('#nLang').value=ME.default_language||'auto';
-  N.look='surprise';
-  $('#nStyles').innerHTML=`<button type="button" class="chip" data-look="surprise" aria-pressed="true">🎲 A different look every video</button>`+Object.entries(META.looks||{}).map(([k,v])=>`<button type="button" class="chip" data-look="${k}" aria-pressed="false" title="${esc(v.desc)}"><i class="sw" style="background:${(META.palettes[v.palette]||{}).accent||'#ccc'}"></i>${esc(v.label)}</button>`).join('');
-  $$('#nStyles .chip').forEach(c=>c.onclick=()=>{N.look=c.dataset.look;$$('#nStyles .chip').forEach(x=>x.setAttribute('aria-pressed',x===c))});
-  try{$('#nBrand').checked=localStorage.getItem('mr_brand')==='1'}catch(e){}$('#nBrand').onchange=e=>{try{localStorage.setItem('mr_brand',e.target.checked?'1':'0')}catch(_){}};
+  designInit();
   $$('#modes .opt').forEach(o=>o.onclick=()=>setMode(o.dataset.mode));
   const drop=$('#drop');drop.onclick=()=>$('#file').click();drop.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('#file').click()}};
   drop.ondragover=e=>{e.preventDefault();drop.classList.add('on')};drop.ondragleave=()=>drop.classList.remove('on');
@@ -575,11 +603,11 @@ function setMode(m){N.mode=m;$$('#modes .opt').forEach(o=>o.setAttribute('aria-p
   $('#scriptLabel').textContent=m==='own_script'?'What you said in the recording':(m==='ai_voice'?'Narration script':'Your script');
   $('#nScript').placeholder=m==='own_script'?'Paste the script you read, or type what you said. Small differences are fine.':'Write or paste what will be said.';
   $('#prompterText').textContent=$('#nScript').value||'Your script will scroll here.';scriptHint();
-  if(m!=='rec')camOff()}
+  if(m!=='rec')camOff();if(N.d!==undefined&&window.META&&META.looks)pvRefresh()}
 function scriptHint(){const w=($('#nScript').value.trim().match(/\S+/g)||[]).length;const lang=$('#nLang').value;const wps=lang==='ar'?2.0:2.45;
   $('#scriptHint').textContent=w?`${w} words · about ${Math.round(w/wps)} seconds spoken`:''}
 function pickFile(f){if(!f)return;if(!f.type.startsWith('video/')&&!/\.(mp4|mov|m4v|webm|mkv)$/i.test(f.name)){toast('Choose a video file.');return}
-  N.file=f;$('#fname').textContent=`${f.name} · ${(f.size/1e6).toFixed(1)} MB`}
+  N.file=f;$('#fname').textContent=`${f.name} · ${(f.size/1e6).toFixed(1)} MB`;grabFrame(f)}
 async function loadTemplates(){const lang=$('#nLang').value==='auto'?'en':$('#nLang').value;scriptHint();
   try{const r=await api('/api/scripts/templates?language='+lang);$('#tpls').innerHTML=r.templates.map(t=>`<button type="button" class="chip" data-t="${t.id}">${esc(t.title)}</button>`).join('');
     $$('#tpls .chip').forEach(c=>c.onclick=()=>{const t=r.templates.find(x=>x.id===c.dataset.t);$('#nScript').value=t.script;if(!$('#nTitle').value)$('#nTitle').value=t.title;$('#nScript').dispatchEvent(new Event('input'))})}catch(e){}}
@@ -588,6 +616,58 @@ async function writeDraft(){const prompt=$('#wPrompt').value.trim();if(!prompt){
   try{const r=await api('/api/scripts/generate',{method:'POST',json:{prompt,language:lang,seconds:+$('#wLen').value}});
     $('#nScript').value=r.script;if(!$('#nTitle').value&&r.title)$('#nTitle').value=r.title;$('#nScript').dispatchEvent(new Event('input'));toast('Draft ready. Check every sentence before recording.')}
   catch(e){toast(e.message)}finally{b.disabled=false;b.textContent='Write a draft'}}
+
+/* design + live preview */
+const MUSN={calm:'Calm piano',pulse:'Light beat',drive:'Upbeat & energetic',cinematic:'Cinematic & epic',off:'No music'};
+function designInit(){
+  N.look='surprise';N.d={};const looks=Object.keys(META.looks||{});N.shown=looks[Math.floor(Math.random()*looks.length)]||'clinic';
+  $('#nStyles').innerHTML=`<button type="button" class="chip" data-look="surprise" aria-pressed="true">🎲 A different look every video</button>`+Object.entries(META.looks||{}).map(([k,v])=>`<button type="button" class="chip" data-look="${k}" aria-pressed="false" title="${esc(v.desc)}"><i class="sw" style="background:${(META.palettes[v.palette]||{}).accent||'#ccc'}"></i>${esc(v.label)}</button>`).join('');
+  $$('#nStyles .chip').forEach(c=>c.onclick=()=>{const k=c.dataset.look;N.look=k;N.d={};if(k==='surprise'){const o=looks.filter(x=>x!==N.shown);N.shown=o[Math.floor(Math.random()*o.length)]}else N.shown=k;designSync();pvRefresh()});
+  const fill=(id,opts)=>{$(id).innerHTML=Object.entries(opts).map(([k,v])=>`<option value="${k}">${esc(typeof v==='string'?v:v.label)}</option>`).join('')};
+  fill('#dCap',META.caption_looks);fill('#dTr',META.transitions);fill('#dFr',META.frames);fill('#dTi',META.titles);fill('#dBg',META.backgrounds);
+  fill('#dMus',Object.fromEntries([...META.music,'off'].map(k=>[k,MUSN[k]||k])));
+  $('#dPal').innerHTML=Object.entries(META.palettes).map(([k,v])=>`<button type="button" class="pal" data-pal="${k}" title="${esc(v.label)}" style="background:${k==='brand'?(ME.brand.primary||'#2EA0FF'):v.accent};box-shadow:inset 0 -11px 0 ${k==='brand'?(ME.brand.secondary||'#0B1730'):v.bg}">${k==='brand'?'★':''}</button>`).join('');
+  $$('#dPal .pal').forEach(b=>b.onclick=()=>dSet('palette',b.dataset.pal));
+  $$('#pDesign select[data-k]').forEach(sl=>sl.onchange=()=>dSet(sl.dataset.k,sl.value));
+  $('#dReset').onclick=()=>{N.d={};designSync();pvRefresh()};
+  $('#dListen').onclick=()=>{const t=$('#dMus').value;if(t==='off')return;if(window._smp&&!_smp.paused){_smp.pause();_smp=null;$('#dListen').textContent='▶';return}
+    window._smp=new Audio('/api/music/'+t);_smp.play().catch(()=>{});$('#dListen').textContent='■';_smp.onended=()=>{$('#dListen').textContent='▶'}};
+  $('#pvSnd').onclick=()=>{const v=$('#pvVid');v.muted=!v.muted;$('#pvSnd').textContent=v.muted?'🔇':'🔊';if(!v.muted)v.play()};
+  try{$('#nBrand').checked=localStorage.getItem('mr_brand')==='1'}catch(e){}
+  $('#nBrand').onchange=e=>{try{localStorage.setItem('mr_brand',e.target.checked?'1':'0')}catch(_){}designSync();pvRefresh()};
+  $('#nLang').addEventListener('change',()=>pvRefresh());$('#nTitle').addEventListener('input',()=>pvRefresh(1200));
+  designSync();pvRefresh();
+}
+function dSet(k,v){N.d[k]=v;if(N.look==='surprise'){N.look=N.shown}designSync();pvRefresh()}
+function dVal(k){const L=META.looks[N.shown]||{};if(N.d[k])return N.d[k];if(k==='palette'&&$('#nBrand').checked)return 'brand';return L[k]}
+function designSync(){
+  $$('#nStyles .chip').forEach(x=>x.setAttribute('aria-pressed',x.dataset.look===N.look));
+  for(const [id,k] of [['#dCap','captions'],['#dTr','transition'],['#dFr','frame'],['#dTi','title'],['#dBg','bg'],['#dMus','music']])$(id).value=dVal(k);
+  $$('#dPal .pal').forEach(b=>b.setAttribute('aria-pressed',b.dataset.pal===dVal('palette')));
+  $('#dReset').classList.toggle('hide',!Object.keys(N.d).length);
+  $('#pvTag').textContent=(N.look==='surprise'?'Example: ':'')+((META.looks[N.shown]||{}).label||'');
+}
+let pvT=null,pvCtl=null,pvURL=null;
+function pvRefresh(delay){clearTimeout(pvT);pvT=setTimeout(pvLoad,delay||350)}
+async function pvLoad(){
+  if(pvCtl)pvCtl.abort();pvCtl=new AbortController();$('#pvLoad').classList.remove('hide');
+  const fd=new FormData();fd.append('look',N.shown);for(const k of ['palette','captions','frame','transition','title','bg','music'])fd.append(k,dVal(k)||'');
+  const lg=$('#nLang').value;fd.append('lang',lg==='auto'?(ME.default_language&&ME.default_language!=='auto'?ME.default_language:'en'):lg);
+  fd.append('title_text',$('#nTitle').value);fd.append('presenter',N.mode==='voice'?'0':'1');if($('#nBrand').checked)fd.append('keep_brand','1');
+  if(N.frame&&N.mode!=='voice')fd.append('frame',N.frame,'frame.jpg');
+  try{const r=await fetch('/api/design_preview',{method:'POST',body:fd,credentials:'same-origin',headers:{'X-CSRF-Token':ME.csrf},signal:pvCtl.signal});
+    if(!r.ok)throw new Error('preview');const b=await r.blob();if(pvURL)URL.revokeObjectURL(pvURL);pvURL=URL.createObjectURL(b);
+    const v=$('#pvVid');v.src=pvURL;v.play().catch(()=>{});$('#pvLoad').classList.add('hide')}
+  catch(e){if(e.name!=='AbortError'){$('#pvLoad').innerHTML='Preview unavailable';}}}
+async function grabFrame(file){  // a still from the doctor's own video, so the preview shows them
+  try{const v=document.createElement('video');v.muted=true;v.playsInline=true;v.src=URL.createObjectURL(file);
+    await new Promise((res,rej)=>{v.onloadeddata=res;v.onerror=rej;setTimeout(rej,8000)});
+    v.currentTime=Math.min(1.5,(v.duration||2)/3);await new Promise(res=>{v.onseeked=res;setTimeout(res,3000)});
+    const c=document.createElement('canvas'),W=540,H=960,k=Math.max(W/v.videoWidth,H/v.videoHeight);c.width=W;c.height=H;
+    const cx=c.getContext('2d');cx.drawImage(v,(W-v.videoWidth*k)/2,(H-v.videoHeight*k)/2,v.videoWidth*k,v.videoHeight*k);
+    const px=cx.getImageData(0,0,W,H).data;let sum=0;for(let i=0;i<px.length;i+=4000)sum+=px[i]+px[i+1]+px[i+2];if(sum/(px.length/4000)/3<8)return;  // black still: browser couldn't decode it
+    N.frame=await new Promise(res=>c.toBlob(res,'image/jpeg',0.85));URL.revokeObjectURL(v.src);
+    $('#dzHint').textContent='Pick a look, then change anything you like. The preview uses a still from your own video.';pvRefresh()}catch(e){}}
 
 /* voice only */
 let vRec=null,vChunks=[],vTimer=null;
@@ -619,7 +699,7 @@ async function recStart(){
   const type=types.find(t=>window.MediaRecorder&&MediaRecorder.isTypeSupported(t))||'';
   chunks=[];N.rec=new MediaRecorder(N.stream,type?{mimeType:type,videoBitsPerSecond:6e6}:{});
   N.rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
-  N.rec.onstop=()=>{const blob=new Blob(chunks,{type:N.rec.mimeType||'video/webm'});N.take=new File([blob],'recording.'+(blob.type.includes('mp4')?'mp4':'webm'),{type:blob.type});
+  N.rec.onstop=()=>{const blob=new Blob(chunks,{type:N.rec.mimeType||'video/webm'});N.take=new File([blob],'recording.'+(blob.type.includes('mp4')?'mp4':'webm'),{type:blob.type});grabFrame(N.take);
     const v=$('#camv');v.srcObject=null;v.src=URL.createObjectURL(blob);v.muted=false;v.controls=true;v.classList.remove('mirror');$('#prompter').classList.add('hide');
     $('#takeOk').textContent=`Take recorded (${$('#recT').textContent}). Watch it back, then make your video — or record again.`;$('#takeOk').classList.remove('hide');$('#recAgain').classList.remove('hide')};
   N.rec.start(1000);recStartT=performance.now();lastT=recStartT;$('#recStop').classList.remove('hide');$('#recBadge').classList.remove('hide');
@@ -634,7 +714,7 @@ async function make(){
   if(m==='auto_edit'&&!video)return showErr(err,'Add your video first.');
   if(m==='rec'&&!video)return showErr(err,'Record your video first: turn on the camera, then press Start recording.');
   if(m==='voice'&&!video)return showErr(err,'Add an audio file or record your voice first.');
-  const fd=new FormData();fd.append('mode',m==='rec'?'auto_edit':m);fd.append('title',$('#nTitle').value);fd.append('language',$('#nLang').value);fd.append('style',N.style||'modern_educational');fd.append('look',N.look||'surprise');if($('#nBrand').checked)fd.append('keep_brand','1');
+  const fd=new FormData();fd.append('mode',m==='rec'?'auto_edit':m);fd.append('title',$('#nTitle').value);fd.append('language',$('#nLang').value);fd.append('style',N.style||'modern_educational');fd.append('look',N.look||'surprise');if($('#nBrand').checked)fd.append('keep_brand','1');for(const [k,v] of Object.entries(N.d||{}))fd.append('d_'+k,v);
   if(video)fd.append(m==='voice'?'audio':'video',video,video.name);
   if(N.vis==='own'&&!N.photos.length)return showErr(err,'Add your photos, or choose another option under “Pictures in your video”.');
   fd.append('visuals',N.vis||'basic');if(N.vis==='ai')fd.append('animations',$('#vAnim').value);if($('#vStock').checked)fd.append('stock','1');
