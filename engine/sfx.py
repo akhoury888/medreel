@@ -39,7 +39,7 @@ def impact(dur=1.1):
     n = int(dur * SR); t = np.arange(n) / SR
     f = 46 + 60 * np.exp(-t / 0.08)
     body = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t / 0.35)
-    burst = _onepole_lp(_RNG.normal(0, 1, n), np.full(n, 900.0)) * np.exp(-t / 0.05) * 0.8
+    burst = _onepole_lp(_RNG.normal(0, 1, n), np.full(n, 300.0)) * np.exp(-t / 0.05) * 0.3  # low thud only: never masks the first consonant
     out = body + burst
     return out / (np.abs(out).max() + 1e-9)
 
@@ -52,7 +52,7 @@ def shimmer(dur=0.6):
 
 
 SOUNDS = {"whoosh": (whoosh, 0.55), "whoosh_out": (lambda: whoosh(0.4, up=False), 0.35), "pop": (pop, 0.45),
-          "impact": (impact, 0.7), "shimmer": (shimmer, 0.25)}  # name -> (generator, gain)
+          "impact": (impact, 0.55), "shimmer": (shimmer, 0.25)}  # name -> (generator, gain)
 
 
 def render_track(events, total, path, level_db=-6.0):

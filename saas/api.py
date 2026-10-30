@@ -46,6 +46,21 @@ def _stock_credit():
     return {"name": c[0], "url": c[1]} if c else None
 
 
+@bp.get("/api/music/<track>")
+@login_required
+def music_sample(track):
+    """A 14-second sample of a background-music track, so doctors can hear it before choosing."""
+    from engine import music
+    if track not in music.TRACKS: abort(404)
+    d = os.path.join(C.STORAGE_DIR, "_music_samples"); os.makedirs(d, exist_ok=True)
+    name = f"v2_{track}.m4a"; path = os.path.join(d, name)
+    if not os.path.exists(path):
+        wav = path + ".wav"; music.generate(track, 14, wav)
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", wav, "-af", "loudnorm=I=-18:TP=-2", "-c:a", "aac", "-b:a", "128k", path], check=True)
+        os.remove(wav)
+    return send_from_directory(d, name, mimetype="audio/mp4", max_age=86400)
+
+
 @bp.get("/api/meta")
 @login_required
 def meta():

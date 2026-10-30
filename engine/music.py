@@ -5,6 +5,10 @@ import numpy as np
 
 SR = 44100
 CHORDS = [(57, 60, 64), (53, 57, 60), (48, 52, 55), (55, 59, 62)]  # Am F C G (MIDI)
+PROG = {"calm": [(60, 64, 67), (55, 59, 62), (57, 60, 64), (53, 57, 60)],       # C G Am F — warm, major
+        "pulse": CHORDS,                                                        # Am F C G — modern explainer
+        "drive": [(64, 67, 71), (60, 64, 67), (55, 59, 62), (62, 66, 69)],      # Em C G D — bright, energetic
+        "cinematic": [(50, 53, 57), (46, 50, 53), (53, 57, 60), (48, 52, 55)]}  # Dm Bb F C — dark, wide
 TRACKS = {"calm": dict(bpm=72, kick=0, hat=0, bass=0, arp=0.5, pad=1.0, drone=0),
           "pulse": dict(bpm=100, kick=0.5, hat=0.18, bass=0.35, arp=0.45, pad=0.8, drone=0),
           "drive": dict(bpm=118, kick=0.85, hat=0.28, bass=0.6, arp=0.4, pad=0.6, drone=0, clap=0.35),
@@ -28,7 +32,7 @@ def generate(track, seconds, out_path):
     pad = np.zeros(n); bass = np.zeros(n); arp = np.zeros(n); perc = np.zeros(n)
     nb = int(np.ceil(seconds / bar)) + 1
     for b in range(nb):
-        ch = CHORDS[b % 4]; s0 = int(b * bar * SR); s1 = min(n, int((b + 1) * bar * SR) + int(0.3 * SR))
+        ch = PROG.get(track, CHORDS)[b % 4]; s0 = int(b * bar * SR); s1 = min(n, int((b + 1) * bar * SR) + int(0.3 * SR))
         if s0 >= n: break
         tt = t[s0:s1] - t[s0]
         env = np.minimum(1, tt / 0.6) * np.exp(-np.maximum(0, tt - bar) * 4)

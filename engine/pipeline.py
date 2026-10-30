@@ -36,6 +36,7 @@ def analyze_and_plan(d, src, style="modern_educational", branding=None, log=prin
     json.dump(an, open(os.path.join(d, "analysis.json"), "w"))
     p(0.75, "Building the editing plan…")
     plan = P.build_plan(src, backend, words, an, style=style, branding=branding, language=lang)
+    _snap(plan, src)
     if title and len(title) <= 60:  # the doctor's own title beats a sentence picked from the transcript
         plan["title"].update({"text": title, "enabled": True})
     _stock(plan, d, p, ai_budget, visuals)
@@ -47,6 +48,11 @@ def analyze_and_plan(d, src, style="modern_educational", branding=None, log=prin
 
 import logging
 _plog = logging.getLogger("medreel.pipeline")
+
+
+def _snap(plan, src):
+    try: A.snap_cuts(plan["cuts"], asr.load_audio(src))
+    except Exception: _plog.exception("snap cuts")
 
 
 def _place_own_photos(plan, photos):
@@ -160,6 +166,7 @@ def create(d, mode, src=None, script=None, style="modern_educational", branding=
         if coverage < 0.35:
             plan["analysis"]["qa"]["issues"].append({"area": "script", "level": "warn",
                 "msg": "The recording doesn't follow the script closely — check caption timing, or switch to automatic captions."})
+    _snap(plan, src)
     if title and len(title) <= 60: plan["title"].update({"text": title, "enabled": True})
     _stock(plan, d, p, ai_budget, visuals)
     plan["mode"] = mode

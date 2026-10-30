@@ -27,7 +27,16 @@ h2{font:700 17px "IBM Plex Sans Condensed",sans-serif;margin:0 0 10px}h3{font-si
 .phone video{width:100%;aspect-ratio:9/16;border-radius:19px;background:#111;display:block}
 .seg{display:flex;background:#f3e6e8;border-radius:10px;padding:3px;margin:10px 0}.seg button{flex:1;border:0;background:none;padding:6px;border-radius:8px;cursor:pointer;font-weight:600;color:var(--mut);font-size:13px}
 .seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
-.stale{background:#fff3d6;border:1px solid #f0d28e;border-radius:12px;padding:10px 12px;margin-bottom:10px;display:flex;gap:10px;align-items:center}
+.stale{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:20;background:#1d2433;color:#fff;border-radius:16px;padding:12px 14px 12px 20px;display:flex;gap:16px;align-items:center;box-shadow:0 14px 40px rgba(20,25,40,.35);width:min(620px,calc(100vw - 32px));animation:staleIn .35s ease-out}
+.stale b{font-size:16px}.stale .mini{color:#c9d0de}.stale .btn{font-size:16px;padding:12px 20px;white-space:nowrap;animation:pulse 1.8s ease-in-out infinite}
+.stale .dot{width:12px;height:12px;border-radius:50%;background:#ffb020;flex:none;box-shadow:0 0 0 4px rgba(255,176,32,.25)}
+@keyframes staleIn{from{opacity:0;transform:translate(-50%,30px)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(200,30,60,.55)}50%{box-shadow:0 0 0 10px rgba(200,30,60,0)}}
+.phone{position:relative}.phone .old{position:absolute;left:0;right:0;top:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:rgba(15,20,30,.82);color:#fff;text-align:center;padding:20px;border-radius:inherit;z-index:2;font-weight:600}
+.phone.isold .old{display:flex}.phone .old .btn{font-size:16px;padding:12px 18px}
+body.hasstale .askmsg{margin-top:10px;font-size:14px;border-radius:10px}.askmsg.ok{color:#17663a;background:#e8f7ee;padding:10px 12px}.askmsg.no{color:#8a4b00;background:#fff3d6;padding:10px 12px}
+.toast{bottom:104px}body.hasstale main{padding-bottom:110px}
+@media(max-width:640px){.stale{flex-wrap:wrap;gap:8px}.stale .btn{width:100%}}
 .dl{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}.dl a{font-size:12px}
 .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:-4px -16px 14px;padding:0 10px;overflow-x:auto}
 .tabs button{border:0;background:none;padding:11px 14px;cursor:pointer;font-weight:600;color:var(--mut);border-bottom:3px solid transparent;white-space:nowrap;font-size:14px}
@@ -99,8 +108,7 @@ details summary{cursor:pointer;font-weight:600;margin:10px 0;color:var(--ink)}
 <main id="studio" class="hide">
   <div class="studio">
     <div class="left">
-      <div class="stale hide" id="stale"><div class="grow" style="flex:1"><b>Changes not in the preview yet</b><div class="mini">Make all your edits, then update once.</div></div><button class="btn pri sm" id="updBtn">▶ Update preview</button></div>
-      <div class="phone"><video id="vid" controls playsinline></video></div>
+            <div class="phone" id="phone"><video id="vid" controls playsinline></video><div class="old"><div>This preview is out of date</div><button class="btn pri" id="updBtn2">▶ Update preview</button></div></div>
       <div class="seg"><button class="on" data-v="preview">Preview</button><button data-v="source">Original</button><button data-v="final">Exported</button></div>
       <button class="btn pri" id="exportBtn" style="width:100%">Approve & export (1080×1920)</button>
       <div class="dl" id="dl"></div>
@@ -114,6 +122,7 @@ details summary{cursor:pointer;font-weight:600;margin:10px 0;color:var(--ink)}
         <h2>Ask for a change</h2>
         <div class="ask"><input id="cmd" placeholder="e.g. “Make the subtitles more dynamic”"><button class="btn pri" id="cmdBtn">Apply</button></div>
         <div class="chips" id="chips"></div>
+        <div class="askmsg" id="askMsg"></div>
       </div>
     </div>
   </div>
@@ -121,12 +130,15 @@ details summary{cursor:pointer;font-weight:600;margin:10px 0;color:var(--ink)}
 
 <div class="prog" id="prog"><div class="card"><h2 id="progT">Editing your video…</h2><div class="bar"><i id="progBar"></i></div><div class="mut" id="progMsg">Starting…</div></div></div>
 <div class="toast" id="toast"></div>
+<div class="stale hide" id="stale"><span class="dot"></span><div style="flex:1"><b>Your changes aren't in the preview yet</b><div class="mini">Make all your edits, then press the button once to see them.</div></div><button class="btn pri" id="updBtn">▶ Update preview</button></div>
 
 <script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 let META=null, PID=null, P=null, R=null, AI=null, view='preview', CSRF='', STALE=false;
 let TAB='board', LIB='photos', PX=26, SELB=null, SELS=null, PICK=null, PHOTOS=[], STOCK=[], STOCKQ='';
-const STY_DESC={clean_professional:'Calm, credible',modern_educational:'Clear explainer',high_energy:'Bold & punchy',cinematic_medical:'Film look, slow',minimalist_premium:'Quiet & premium'};
+let SAMPLE=null;function stopSample(){if(SAMPLE){SAMPLE.pause();SAMPLE=null}const b=$('#mPlay');if(b)b.textContent='▶ Listen'}
+const MUS_NAME={calm:'Calm piano',pulse:'Light beat',drive:'Upbeat & energetic',cinematic:'Cinematic & epic'};
+const STY_DESC={clean_professional:'Natural colours · calm music · soft motion',modern_educational:'Bright colours · light beat · progress bar',high_energy:'Vivid colours · pop subtitles · strong zooms · upbeat music',cinematic_medical:'Film colours & vignette · slow fades · epic music',minimalist_premium:'Soft colours · minimal subtitles · very little motion'};
 const LAYOUT_NAMES={split:'Split screen (visual on top, you below)',pip:'You in a bubble',full_graphic:'Visual only (your voice continues)',side:'Card beside you',labels:'Floating card over you',full:'Just you'};
 const MED_EMOJI={coronary:'🩸',heart:'🫀',ct:'🩻',ecg:'📈',bp:'🩺'};
 const CHIPS=['Make the subtitles more dynamic','Add English subtitles','Change the background music','Make the video look more professional'];
@@ -168,7 +180,7 @@ function setVideo(v){view=v;$$('.seg button').forEach(b=>b.classList.toggle('on'
   $('#vid').src=src+'?t='+Date.now();}
 $$('.seg button').forEach(b=>b.onclick=()=>setVideo(b.dataset.v));
 $$('#tabs button').forEach(b=>b.onclick=()=>{TAB=b.dataset.t;$$('#tabs button').forEach(x=>x.classList.toggle('on',x===b));['board','words','look','check'].forEach(t=>$('#tab-'+t).classList.toggle('hide',t!==TAB))});
-function setStale(v){STALE=v;$('#stale').classList.toggle('hide',!v)}
+function setStale(v){STALE=v;$('#stale').classList.toggle('hide',!v);document.body.classList.toggle('hasstale',!!v);$('#phone').classList.toggle('isold',!!v);if(v){try{$('#vid').pause()}catch(e){}}}
 const seekOut=t=>{if(view!=='preview')setVideo('preview');const v=$('#vid');const go=()=>{v.currentTime=t};v.readyState>0?go():v.addEventListener('loadedmetadata',go,{once:true})};
 
 /* time mapping (source <-> edited output) */
@@ -182,6 +194,7 @@ function canAI(k){return !!META.ai_images&&(!AI||(AI.left>=AI.cost[k]&&AI.video[
 /* edits: applied to the plan at once, preview updated on request */
 async function ops(o,{render=false,quiet=false}={}){const r=await post(`/api/projects/${PID}/ops`,{ops:o,render});if(!quiet&&r.message)toast(r.message);
   if(render){await waitJob();setStale(false);await openProject(PID);setVideo('preview')}else{setStale(true);await openProject(PID,true)}}
+$('#updBtn2').onclick=()=>$('#updBtn').click();
 $('#updBtn').onclick=async()=>{await post(`/api/projects/${PID}/render`,{});await waitJob();setStale(false);await openProject(PID);setVideo('preview')};
 async function doExport(){await post(`/api/projects/${PID}/render`,{final:true});await waitJob('Exporting your video (1080×1920)…');setStale(false);await openProject(PID);setVideo('final');toast('Your video is ready — download it below the preview.')}
 $('#exportBtn').onclick=doExport;$('#exportTop').onclick=doExport;
@@ -347,7 +360,8 @@ function renderLook(){
     <h3>Motion & sound</h3>
     <div class="row"><div class="grow"><b>Motion graphics</b><div class="mini">Flash and camera punch when a visual appears, light sweep, animated title bar</div></div><label class="sw"><input type="checkbox" id="fxT" ${fx.transitions!==false?'checked':''}><span></span></label></div>
     <div class="row"><div class="grow"><b>Sound effects</b><div class="mini">Whooshes on scene changes, soft pops on icons and keywords</div></div><label class="sw"><input type="checkbox" id="fxS" ${fx.sfx!==false?'checked':''}><span></span></label></div>
-    <div class="grid2" style="margin-top:8px"><label class="f">Background music<select id="sMus"><option value="off">Off</option>${META.music.map(c=>`<option value="${c}" ${P.music.enabled&&c==P.music.track?'selected':''}>${c[0].toUpperCase()+c.slice(1)}</option>`).join('')}</select></label>
+    <div class="grid2" style="margin-top:8px"><label class="f">Background music<span style="display:flex;gap:8px"><select id="sMus" style="flex:1"><option value="off">Off</option>${META.music.map(c=>`<option value="${c}" ${P.music.enabled&&c==P.music.track?'selected':''}>${MUS_NAME[c]||c}</option>`).join('')}</select><button type="button" class="btn sm" id="mPlay">▶ Listen</button></span></label>
+      <label class="f">Music volume<select id="sVol">${[[-30,'Very soft'],[-26,'Soft'],[-22,'Normal'],[-18,'Loud']].map(([v,l])=>`<option value="${v}" ${Math.abs((P.music.db??-24)-v)<=2?'selected':''}>${l}</option>`).join('')}</select></label>
       <label class="f">AI image style<select id="sImg">${[['3d','3D medical'],['flat','Flat illustration'],['photo','Photo-realistic']].map(([v,l])=>`<option value="${v}" ${(b.image_style||'3d')===v?'selected':''}>${l}</option>`).join('')}</select></label>
       <label class="f" style="grid-column:1/-1">Opening title<input id="sTitle" value="${esc(P.title.text)}"></label></div>
     <button class="btn pri sm" id="saveLook" style="margin-top:10px">Save title</button>
@@ -357,7 +371,10 @@ function renderLook(){
   $$('[data-sty]').forEach(x=>x.onclick=()=>ops([{op:'set_style',style:x.dataset.sty}]));
   $('#fxT').onchange=e=>ops([{op:'set_effects',transitions:e.target.checked}]);
   $('#fxS').onchange=e=>ops([{op:'set_effects',sfx:e.target.checked}]);
-  $('#sMus').onchange=e=>ops([{op:'set_music',track:e.target.value}]);
+  $('#sMus').onchange=e=>{stopSample();ops([{op:'set_music',track:e.target.value}])};
+  $('#sVol').onchange=e=>ops([{op:'music_volume',delta_db:+e.target.value-(P.music.db??-24)}]);
+  $('#mPlay').onclick=()=>{const t=$('#sMus').value;if(t==='off')return toast('Choose a track first.');if(SAMPLE&&!SAMPLE.paused&&SAMPLE.dataset.t===t){stopSample();return}
+    stopSample();SAMPLE=new Audio(`/api/music/${t}`);SAMPLE.dataset.t=t;SAMPLE.play().catch(()=>toast('Could not play the sample.'));$('#mPlay').textContent='■ Stop';SAMPLE.onended=stopSample};
   $('#sImg').onchange=e=>ops([{op:'set_branding',fields:{image_style:e.target.value}}],{quiet:true});
   $('#saveLook').onclick=()=>ops([{op:'set_title',text:$('#sTitle').value}]);
   $('#saveBrand').onclick=()=>{const f={};$$('[data-pb]').forEach(i=>f[i.dataset.pb]=i.value);ops([{op:'set_branding',fields:f}])};
@@ -377,8 +394,11 @@ function renderCheck(){
 }
 
 /* ======================= ASK ======================= */
-async function cmdRun(text){if(!text.trim())return;const r=await post(`/api/projects/${PID}/command`,{text});toast(r.message);if(r.ok){await waitJob();setStale(false);await openProject(PID);setVideo('preview')}}
-$('#cmdBtn').onclick=()=>{cmdRun($('#cmd').value);$('#cmd').value=''};$('#cmd').onkeydown=e=>{if(e.key==='Enter')$('#cmdBtn').click()};
+async function cmdRun(text){if(!text.trim())return;const b=$('#cmdBtn');b.disabled=true;const was=b.textContent;b.textContent='Working…';
+  let r;try{r=await post(`/api/projects/${PID}/command`,{text})}catch(e){b.disabled=false;b.textContent=was;return}
+  b.disabled=false;b.textContent=was;$('#askMsg').textContent=r.message||'';$('#askMsg').className='askmsg '+(r.ok?'ok':'no');
+  if(r.ok){$('#cmd').value='';await waitJob('Applying your change…');setStale(false);await openProject(PID);setVideo('preview')}}
+$('#cmdBtn').onclick=()=>cmdRun($('#cmd').value);$('#cmd').onkeydown=e=>{if(e.key==='Enter')$('#cmdBtn').click()};
 $('#chips').innerHTML=CHIPS.map(c=>`<span class="chip">${c}</span>`).join('');$$('#chips .chip').forEach(c=>c.onclick=()=>{$('#cmd').value=c.textContent;$('#cmd').focus()});
 window.addEventListener('beforeunload',e=>{if(STALE){e.preventDefault();e.returnValue=''}});
 init();

@@ -27,9 +27,10 @@ LAYOUT = {
 }
 GRADES = {
     "natural": "eq=contrast=1.04:saturation=1.06,unsharp=5:5:0.4",
-    "bright": "eq=contrast=1.06:brightness=0.02:saturation=1.10,unsharp=5:5:0.5",
-    "punchy": "eq=contrast=1.12:saturation=1.20,unsharp=5:5:0.7",
-    "cinematic": "eq=contrast=1.08:saturation=0.94,colorbalance=rs=-0.04:bs=0.05:rh=0.05:bh=-0.04,vignette=PI/5",
+    "bright": "eq=contrast=1.07:brightness=0.03:saturation=1.16,colorbalance=rh=0.03:bh=-0.02,unsharp=5:5:0.5",
+    "punchy": "eq=contrast=1.18:saturation=1.34,colorbalance=rm=0.03:bm=-0.02,unsharp=5:5:0.8",
+    "cinematic": "eq=contrast=1.12:saturation=0.88,colorbalance=rs=-0.07:bs=0.08:rh=0.08:bh=-0.07,vignette=PI/4",
+    "soft": "eq=contrast=0.98:brightness=0.025:saturation=0.90,unsharp=5:5:0.3",
 }
 
 
@@ -365,24 +366,26 @@ def build_audio(plan, keeps, total, workdir, log):
     fg = ";".join(parts) + ";" + "".join(f"[a{i}]" for i in range(len(keeps))) + f"concat=n={len(keeps)}:v=0:a=1,{chain},apad=whole_dur={total:.3f}[voice]"
     inputs = ["-i", src]
     mus = plan["music"]
+    fg += ";[voice]asplit=3[v1][vsc][vsc2]"
     if mus.get("enabled") and mus.get("track") in M.TRACKS:
-        mp = os.path.join(workdir, f"music_{mus['track']}_{int(total)+2}.wav")
+        mp = os.path.join(workdir, f"music_v2_{mus['track']}_{int(total)+2}.wav")
         if not os.path.exists(mp): M.generate(mus["track"], total + 2, mp)
         inputs += ["-i", mp]
-        # music bed at a fixed loudness under the voice (-14 LUFS): db -24 -> about -29 LUFS, then gentle ducking while speaking
-        target = clamp(mus.get("db", -24) - 5, -40, -20)
-        fg += (f";[voice]asplit=2[v1][vsc];[1:a]atrim=0:{total:.3f},loudnorm=I={target:.1f}:TP=-3:LRA=7,aresample=44100,aformat=channel_layouts=stereo,"
+        # music bed clearly audible but under the voice (-14 LUFS): db -24 -> about -25 LUFS, ducked while speaking
+        target = clamp(mus.get("db", -24) - 1, -36, -18)
+        fg += (f";[1:a]atrim=0:{total:.3f},loudnorm=I={target:.1f}:TP=-3:LRA=7,aresample=44100,aformat=channel_layouts=stereo,"
                f"afade=t=in:d=0.6,afade=t=out:st={max(0, total-2.5):.3f}:d=2.5[m];"
-               f"[m][vsc]sidechaincompress=threshold=0.03:ratio=3:attack=20:release=400[md];[v1][md]amix=inputs=2:normalize=0:duration=first[mixA]")
+               f"[m][vsc]sidechaincompress=threshold=0.03:ratio=2.5:attack=30:release=500[md];[v1][md]amix=inputs=2:normalize=0:duration=first[mixA]")
     else:
-        fg += ";[voice]anull[mixA]"
+        fg += ";[vsc]anullsink;[v1]anull[mixA]"
     ev = sfx_events(plan, P.Timeline(keeps)) if plan.get("effects", {}).get("sfx", True) else []
-    if ev:  # sound design: whooshes, pops, title impact (procedural, royalty-free)
+    if ev:  # sound design: whooshes, pops, title impact (procedural, royalty-free), ducked under the voice so no word is masked
         sp = os.path.join(workdir, "sfx.wav"); SFX.render_track(ev, total, sp)
         k = len(inputs) // 2; inputs += ["-i", sp]
-        fg += f";[{k}:a]atrim=0:{total:.3f},aresample=44100,aformat=channel_layouts=stereo[fx];[mixA][fx]amix=inputs=2:normalize=0:duration=first[aout]"
+        fg += (f";[{k}:a]atrim=0:{total:.3f},aresample=44100,aformat=channel_layouts=stereo[fx0];"
+               f"[fx0][vsc2]sidechaincompress=threshold=0.02:ratio=6:attack=2:release=250[fx];[mixA][fx]amix=inputs=2:normalize=0:duration=first[aout]")
     else:
-        fg += ";[mixA]anull[aout]"
+        fg += ";[vsc2]anullsink;[mixA]anull[aout]"
     cmd = ["ffmpeg", "-y", "-v", "error", *inputs, "-filter_complex", fg, "-map", "[aout]", "-t", f"{total:.3f}", "-c:a", "aac", "-b:a", "192k", out]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode: raise RuntimeError("audio: " + r.stderr[-800:])
@@ -419,7 +422,15 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
     s = W / 1080
     G.UI_SCALE = s
     brand = plan["branding"]; accent = hex2rgb(brand["primary"]); sec = hex2rgb(brand["secondary"])
+    try:  # never cut through a word, even when the transcript timing is a little off
+        from . import analyze as AN, asr as ASR
+        n = AN.snap_cuts(plan["cuts"], ASR.load_audio(plan["source"]["path"]))
+        if n: log(f"Moved {n} cut edge(s) to real silence so no word is clipped.")
+    except Exception as e: log(f"cut snapping skipped: {e}")
     keeps = P.keep_segments(plan); tl = P.Timeline(keeps)
+    _sp = P.STYLES.get(plan.get("style"), {})
+    fxk = float(plan["style_params"].get("fx", _sp.get("fx", 1.0)))  # motion-graphics strength of this style
+    fxflash = 1.0 if plan["style_params"].get("flash", _sp.get("flash", True)) else 0.0
     outro_d = 3.0 if brand.get("outro", True) else 0.0
     total = tl.duration + outro_d
     nframes = int(total * fps)
@@ -518,9 +529,9 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
         for ea, eb in emph:
             if ea <= T < eb: z *= 1 + zp["punch"] * min(ease_out_cubic((T - ea) / 0.18), ease_in_out((eb - T) / 0.3))
         fxon = plan.get("effects", {}).get("transitions", True)
-        if fxon and scn is not None:  # camera punch as a visual arrives / leaves
+        if fxon and scn is not None:  # camera punch as a visual arrives / leaves (strength depends on the style)
             sa, sb = next((a, b) for a, b, sc in scenes if sc is scn)
-            z *= 1 + 0.06 * max(np.exp(-((T - sa) / 0.18) ** 2), np.exp(-((T - sb) / 0.18) ** 2))
+            z *= 1 + 0.06 * fxk * max(np.exp(-((T - sa) / 0.18) ** 2), np.exp(-((T - sb) / 0.18) ** 2))
         canvas = bg.copy()
         dx, dy, dw, dh = lay["doc"][0] * W, lay["doc"][1] * H, lay["doc"][2] * W, lay["doc"][3] * H
         gx, gy, gw, gh = lay["gfx"][0] * W, lay["gfx"][1] * H, lay["gfx"][2] * W, lay["gfx"][3] * H
@@ -578,10 +589,10 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
                     yy_, xx_ = np.mgrid[y0_:y1_, x0_:x1_].astype(np.float32)
                     pos = (xx_ - x0_) + (yy_ - y0_) * 0.45
                     c_ = -0.3 * (x1_ - x0_) + u_ * 1.9 * (x1_ - x0_)
-                    band = np.exp(-((pos - c_) / (0.07 * (x1_ - x0_))) ** 2) * 0.22 * np.sin(np.pi * u_)
+                    band = np.exp(-((pos - c_) / (0.07 * (x1_ - x0_))) ** 2) * 0.22 * min(1.3, fxk) * np.sin(np.pi * u_)
                     roi = canvas[y0_:y1_, x0_:x1_].astype(np.float32)
                     canvas[y0_:y1_, x0_:x1_] = np.clip(roi + band[..., None] * 255, 0, 255).astype(np.uint8)
-            fl = 0.30 * np.exp(-((T - sa) / 0.07) ** 2)  # quick flash on the cut
+            fl = 0.30 * fxk * fxflash * np.exp(-((T - sa) / 0.07) ** 2)  # quick flash on the cut
             if fl > 0.01: canvas[:] = np.clip(canvas.astype(np.float32) * (1 - fl) + 255 * fl, 0, 255).astype(np.uint8)
         # avoid-zones for captions: face (when visible) + floating graphic card
         avoid = []; face_box = None

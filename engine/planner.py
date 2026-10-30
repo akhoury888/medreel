@@ -7,15 +7,15 @@ from . import knowledge as K
 
 STYLES = {
     "clean_professional": {"label": "Clean professional", "captions": "highlight", "zoom": 0.08, "punch": 0.10, "push": 0.04,
-                           "transition": 0.45, "grade": "natural", "music": "calm", "music_db": -26, "progress_bar": False, "title": "slide"},
+                           "transition": 0.45, "grade": "natural", "music": "calm", "music_db": -26, "progress_bar": False, "title": "slide", "fx": 0.7, "flash": True},
     "modern_educational": {"label": "Modern educational", "captions": "highlight", "zoom": 0.12, "punch": 0.14, "push": 0.05,
-                           "transition": 0.4, "grade": "bright", "music": "pulse", "music_db": -24, "progress_bar": True, "title": "slide"},
+                           "transition": 0.4, "grade": "bright", "music": "pulse", "music_db": -24, "progress_bar": True, "title": "slide", "fx": 1.0, "flash": True},
     "high_energy": {"label": "High-energy social", "captions": "pop", "zoom": 0.18, "punch": 0.22, "push": 0.06,
-                    "transition": 0.3, "grade": "punchy", "music": "drive", "music_db": -22, "progress_bar": True, "title": "pop"},
+                    "transition": 0.3, "grade": "punchy", "music": "drive", "music_db": -21, "progress_bar": True, "title": "pop", "fx": 1.6, "flash": True},
     "cinematic_medical": {"label": "Cinematic medical", "captions": "minimal", "zoom": 0.06, "punch": 0.08, "push": 0.07,
-                          "transition": 0.6, "grade": "cinematic", "music": "cinematic", "music_db": -24, "progress_bar": False, "title": "fade"},
+                          "transition": 0.6, "grade": "cinematic", "music": "cinematic", "music_db": -23, "progress_bar": False, "title": "fade", "fx": 0.8, "flash": False},
     "minimalist_premium": {"label": "Minimalist premium", "captions": "minimal", "zoom": 0.04, "punch": 0.05, "push": 0.03,
-                           "transition": 0.55, "grade": "natural", "music": "calm", "music_db": -28, "progress_bar": False, "title": "fade"},
+                           "transition": 0.55, "grade": "soft", "music": "calm", "music_db": -27, "progress_bar": False, "title": "fade", "fx": 0.4, "flash": False},
 }
 CAPTION_STYLES = ["minimal", "highlight", "pop"]  # increasing dynamism
 MUSIC_TRACKS = ["calm", "pulse", "drive", "cinematic"]

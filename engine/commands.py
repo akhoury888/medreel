@@ -110,24 +110,55 @@ def parse_rules(cmd):
     return ops
 
 
+OP_HELP = """set_style: overall editing look (colours, zoom, music, subtitle style). caption_dynamism: +1 livelier / -1 calmer subtitles.
+set_caption_style: minimal|highlight|pop. captions_enabled: subtitles on/off. cut_range: remove a part (preview seconds).
+remove_pause_near: remove the pause near a time. cut_phrase: remove the sentence containing a phrase. enable_cuts: auto-remove all silences/retakes/fillers.
+restore_all_cuts: put removed parts back. add_graphic: built-in medical animation at a phrase or time. remove_graphics: remove animations (asset optional).
+set_layout: how an animation is shown with the doctor (asset optional = all). face_visible: never hide the doctor's face.
+set_music: track calm|pulse|drive|cinematic, or next/off/on. music_volume: delta_db (+3 louder, -4 quieter).
+zoom: delta (+0.06 more camera zoom, -0.06 less). translate_captions + caption_mode: subtitles in another language (both = original + translation).
+set_title / title_enabled: the opening title. image_style: AI illustration style. set_effects: transitions = motion graphics on/off, sfx = sound effects on/off.
+delete_scene / scene_time: remove or retime a visual by id (times in preview seconds)."""
+
+
 def parse_llm(cmd, plan):
+    """Returns (ops, reply). reply explains in one friendly sentence when the request can't be done."""
     key = os.environ.get("ANTHROPIC_API_KEY")
-    if not key: return []
-    import urllib.request
-    sents = [f"[{s['start']:.1f}s] {s['text']}" for s in plan["analysis"]["sentences"]]
-    prompt = (f"You convert a physician's video-editing request into JSON operations.\nAllowed ops (name: params): {json.dumps(OPS_SCHEMA)}\n"
-              f"Times (t_out/start_out/end_out) are seconds in the EDITED preview. Transcript (source times):\n" + "\n".join(sents) +
-              f"\nCurrent scenes: {json.dumps([{k: s[k] for k in ('layout', 'graphic', 'text')} for s in plan['scenes']])}\n"
-              f"Request: {cmd}\nReply with ONLY a JSON list of ops like [{{\"op\":\"...\", ...}}]. Use [] if impossible.")
-    body = json.dumps({"model": os.environ.get("MEDREEL_LLM", "claude-haiku-5-5"), "max_tokens": 400,
+    if not key: return [], "Free-text requests need the Claude key (ANTHROPIC_API_KEY) — the buttons above still work."
+    import urllib.request, logging
+    tl = P.Timeline(P.keep_segments(plan))
+    sents = [f"[{tl.to_out(s['start']):.1f}s] {s['text']}" for s in plan["analysis"]["sentences"]]
+    scenes = [{"id": s["id"], "from": round(tl.to_out(s["start"]), 1), "to": round(tl.to_out(s["end"]), 1), "layout": s.get("layout"),
+               "asset": s.get("graphic", {}).get("asset"), "about": (s.get("text") or s.get("caption") or "")[:60],
+               "hidden": not s.get("enabled", True)} for s in plan["scenes"]]
+    state = {"style": plan.get("style"), "music": plan.get("music"), "captions": {k: plan["captions"].get(k) for k in ("style", "enabled", "mode")},
+             "title": plan["title"].get("text"), "effects": plan.get("effects")}
+    prompt = (f"You turn a doctor's request about their social-media video into editing operations.\n"
+              f"Allowed ops and parameters (JSON): {json.dumps(OPS_SCHEMA)}\nWhat they do:\n{OP_HELP}\n"
+              f"All times are seconds in the edited video.\nCurrent settings: {json.dumps(state, ensure_ascii=False)}\n"
+              f"Visuals on the timeline: {json.dumps(scenes, ensure_ascii=False)}\nScript (edited-video times):\n" + "\n".join(sents) +
+              f"\n\nRequest (may be in English, French or Lebanese Arabic): {cmd}\n\n"
+              "Reply with ONLY a JSON object: {\"ops\": [{\"op\": \"...\", ...}], \"reply\": \"...\"}. "
+              "Pick the closest ops even if the request is loosely worded. If nothing fits, return no ops and put in reply one short, "
+              "friendly sentence (in the request's language) saying what you can't do and what the doctor can do instead in the studio.")
+    body = json.dumps({"model": os.environ.get("MEDREEL_LLM", "claude-sonnet-5-5"), "max_tokens": 1000,
                        "messages": [{"role": "user", "content": prompt}]}).encode()
     req = urllib.request.Request("https://api.anthropic.com/v1/messages", body, {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
     try:
-        txt = json.loads(urllib.request.urlopen(req, timeout=30).read())["content"][0]["text"]
-        ops = json.loads(txt[txt.index("["): txt.rindex("]") + 1])
-        return [o for o in ops if isinstance(o, dict) and o.get("op") in OPS_SCHEMA]
-    except Exception:
-        return []
+        res = json.loads(urllib.request.urlopen(req, timeout=60).read())
+        txt = "".join(c.get("text", "") for c in res.get("content", []) if c.get("type") == "text")
+        obj = json.loads(txt[txt.index("{"): txt.rindex("}") + 1])
+        ops = [o for o in obj.get("ops", []) if isinstance(o, dict) and o.get("op") in OPS_SCHEMA]
+        return ops, (obj.get("reply") or "").strip()
+    except Exception as e:
+        detail = ""
+        if hasattr(e, "read"):
+            try: detail = e.read().decode()[:300]
+            except Exception: pass
+        logging.getLogger("medreel.commands").warning("Claude edit request failed: %s %s", e, detail)
+        if "401" in str(e) or "authentication" in detail: return [], "The Claude key was refused — check ANTHROPIC_API_KEY in your .env file."
+        if "credit" in detail.lower() or "billing" in detail.lower(): return [], "The Claude account has no credit left — add credit at console.anthropic.com."
+        return [], "I couldn't reach Claude just now — please try again in a moment."
 
 
 def _find_phrase(plan, phrase):
@@ -384,14 +415,18 @@ def execute(plan_path, command):
     plan = json.load(open(plan_path))
     ops = parse_rules(command)
     source = "rules"
+    reply = ""
     if not ops:
-        ops = parse_llm(command, plan); source = "llm"
+        ops, reply = parse_llm(command, plan); source = "llm"
     if not ops:
-        return {"ok": False, "message": "I couldn't map that to an edit yet. Try e.g. “make the subtitles more dynamic”, “remove the pause at 30 seconds”, “add a stent animation when I discuss angioplasty”."}
+        return {"ok": False, "message": reply or "I couldn't turn that into an edit. Try e.g. “make the subtitles more dynamic”, “remove the pause at 30 seconds”, “change the music to something calmer”."}
     if ops[0]["op"] == "undo":
         prev = P.undo(plan_path)
         return {"ok": bool(prev), "message": "Undone." if prev else "Nothing to undo.", "ops": ops}
-    msgs = [apply(plan, op) for op in ops]
+    msgs = []
+    for op in ops:
+        try: msgs.append(apply(plan, op))
+        except Exception as e: msgs.append(f"(skipped one change: {op.get('op')})")
     plan.setdefault("log", []).append({"command": command, "ops": ops, "via": source})
     P.save(plan, plan_path)
     return {"ok": True, "message": " ".join(msgs), "ops": ops, "via": source}

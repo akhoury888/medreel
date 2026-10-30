@@ -49,6 +49,46 @@ def detect_silences(words, duration, min_gap=0.45, pad=0.12):
     return gaps
 
 
+def snap_cuts(cuts, audio, sr=SR, reach=0.4, quiet_run=0.07, pad=0.03):
+    """Never cut through a word. Transcript timestamps are often a little late or early (dialect Arabic
+    especially), so a cut that ends where the transcript says a word starts can chop its first syllable
+    ('Dr' -> 'r'). Each cut edge that lands on sound is moved to the nearest real silence (a quiet stretch
+    of >= quiet_run seconds) within `reach` seconds — into the cut, so the kept speech is never shortened.
+    Idempotent: edges already on silence don't move. Returns the number of edges moved."""
+    if audio is None or not len(audio): return 0
+    env, hop = rms_envelope(audio, sr, hop=0.01)
+    if len(env) < 10: return 0
+    floor, loud = np.percentile(env, 10), np.percentile(env, 90)
+    thr = max(floor * 3.0, loud * 0.10, 1e-4)
+    quiet = env < thr
+    run = max(2, int(round(quiet_run / hop)))
+    reach_f = int(reach / hop); moved = 0
+
+    def is_sound(t):
+        i = int(t / hop)
+        return 0 <= i < len(env) and env[max(0, i - 1): i + 2].max() >= thr
+
+    for c in cuts:
+        if not c.get("enabled") or c.get("reason") == "manual": continue
+        a, b = c["start"], c["end"]
+        if is_sound(b):  # speech resumes before the cut ends: move the end back to the silence before it
+            i = int(b / hop); lo = max(0, i - reach_f); k = i; n = 0; hit = None
+            while k > lo:
+                k -= 1; n = n + 1 if quiet[k] else 0
+                if n >= run: hit = k + n; break
+            nb = (hit * hop - pad) if hit is not None else b - 0.2
+            if nb < b: c["end"] = round(max(a, nb), 3); moved += 1
+        if is_sound(a):  # speech is still going when the cut starts: move the start forward to the silence after it
+            i = int(a / hop); hi = min(len(env), i + reach_f); k = i - 1; n = 0; hit = None
+            while k < hi - 1:
+                k += 1; n = n + 1 if quiet[k] else 0
+                if n >= run: hit = k - n + 1; break
+            na = (hit * hop + pad) if hit is not None else a  # no silence nearby: leave it
+            if na > a: c["start"] = round(min(c["end"], na), 3); moved += 1
+        if c["end"] - c["start"] < 0.06: c["enabled"] = False  # nothing silent left to cut: keep the audio intact
+    return moved
+
+
 def detect_fillers(words, audio):
     out = []
     toks = [K.norm(w["text"]) for w in words]
