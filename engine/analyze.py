@@ -306,7 +306,7 @@ def analyze(path, words, lang="en", extra_retakes=None, presenter=True):
     for idx, s in enumerate(sents):
         ms = K.match_graphics(s["text"])
         if ms: graphics_needed.append({"sentence": idx, "start": s["start"], "end": s["end"], **ms[0], "alts": ms[1:], "text": s["text"]})
-    fillers = detect_fillers(words, audio) if presenter else []
+    fillers = detect_fillers(words, audio)  # TTS has none; a real voice (with or without a face) does
     if presenter and any(w.get("approx") for w in words[:5]):
         seen = {(round(f["start"], 1)) for f in fillers}
         fillers += [f for f in detect_vocal_regions(words, audio) if round(f["start"], 1) not in seen]

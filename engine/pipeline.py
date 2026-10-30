@@ -23,7 +23,7 @@ def ingest(root, src_path, pid=None):
     return pid, d, dst
 
 
-def analyze_and_plan(d, src, style="modern_educational", branding=None, log=print, progress=None, language="auto", title=None, ai_budget=None, visuals=None):
+def analyze_and_plan(d, src, style="modern_educational", branding=None, log=print, progress=None, language="auto", title=None, ai_budget=None, visuals=None, presenter=True):
     def p(x, msg):
         log(msg)
         if progress: progress(x, msg)
@@ -32,10 +32,10 @@ def analyze_and_plan(d, src, style="modern_educational", branding=None, log=prin
     backend, words, lang = asr.transcribe(src, language, context=ctx)
     json.dump({"backend": backend, "language": lang, "words": words}, open(os.path.join(d, "transcript.json"), "w"))
     p(0.45, f"Transcribed {len(words)} words ({backend}, {lang}). Analysing pauses, retakes, medical content, framing and audio…")
-    an = A.analyze(src, words, lang)
+    an = A.analyze(src, words, lang, presenter=presenter)
     json.dump(an, open(os.path.join(d, "analysis.json"), "w"))
     p(0.75, "Building the editing plan…")
-    plan = P.build_plan(src, backend, words, an, style=style, branding=branding, language=lang)
+    plan = P.build_plan(src, backend, words, an, style=style, branding=branding, language=lang, presenter=presenter)
     _snap(plan, src)
     if title and len(title) <= 60:  # the doctor's own title beats a sentence picked from the transcript
         plan["title"].update({"text": title, "enabled": True})
@@ -121,7 +121,8 @@ def _stock(plan, d, p, ai_budget=None, visuals=None):
         pass  # footage is a bonus: never fail a video because of it
 
 
-MODES = {"auto_edit": "Upload a recording — AI edits everything",
+MODES = {"auto_edit": "Upload or record a video — AI edits everything",
+         "voice": "Voice only — your voice over medical animations and pictures, no face on screen",
          "own_script": "Upload a recording + your script — exact captions, AI graphics",
          "teleprompter": "Prompt → AI script → record with the teleprompter → AI edits",
          "ai_voice": "Prompt or script → video with AI narration (no recording)"}
@@ -133,6 +134,8 @@ def create(d, mode, src=None, script=None, style="modern_educational", branding=
     def p(x, msg):
         log(msg)
         if progress: progress(x, msg)
+    if mode == "voice":
+        return analyze_and_plan(d, src, style, branding, log, progress, language, title, ai_budget, visuals, presenter=False)
     if mode == "auto_edit" or (mode in ("own_script", "teleprompter") and not (script or "").strip()):
         return analyze_and_plan(d, src, style, branding, log, progress, language, title, ai_budget, visuals)
     lang = language if language in ("en", "fr", "ar") else script_align.detect_script_language(script)

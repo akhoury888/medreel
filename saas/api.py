@@ -8,6 +8,7 @@ from .models import Session, Project, Usage, Job, videos_used, now, ai_credits_l
 
 bp = Blueprint("api", __name__)
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi", ".3gp"}
+AUDIO_EXT = {".mp3", ".m4a", ".wav", ".aac", ".ogg", ".oga", ".opus", ".webm", ".flac", ".amr", ".mp4"}
 
 
 def _own(pid):
@@ -104,8 +105,8 @@ def create_project():
     if language not in ("auto", "en", "fr", "ar"): language = "auto"
     style = f.get("style", u.default_style)
     if style not in planner.STYLES: style = "modern_educational"
-    video = request.files.get("video")
-    if mode in ("auto_edit", "own_script", "teleprompter") and not video: abort(400, "Add your recording.")
+    video = request.files.get("video") or request.files.get("audio")
+    if mode in ("auto_edit", "own_script", "teleprompter", "voice") and not video: abort(400, "Add your recording.")
     if mode in ("own_script", "teleprompter", "ai_voice") and not script: abort(400, "Add the script.")
     if mode == "ai_voice" and len(script.split()) > 450: abort(400, "That script is too long for one video (keep it under ~3 minutes).")
     p = Project(user_id=u.id, title=(f.get("title") or "").strip()[:300] or "Untitled video", mode=mode, language=language,
@@ -114,23 +115,35 @@ def create_project():
     os.makedirs(os.path.join(p.dir, "renders"), exist_ok=True)
     payload = {}
     if video:
-        ext = os.path.splitext(video.filename or "")[1].lower() or ".mp4"
-        if ext not in VIDEO_EXT: Session.rollback(); shutil.rmtree(p.dir, ignore_errors=True); abort(400, "Upload a video file (MP4, MOV or WebM).")
+        ext = os.path.splitext(video.filename or "")[1].lower() or (".webm" if mode == "voice" else ".mp4")
+        ok_ext = AUDIO_EXT | VIDEO_EXT if mode == "voice" else VIDEO_EXT
+        if ext not in ok_ext:
+            Session.rollback(); shutil.rmtree(p.dir, ignore_errors=True)
+            abort(400, "Upload an audio file (MP3, M4A, WAV…)." if mode == "voice" else "Upload a video file (MP4, MOV or WebM).")
         up = os.path.join(p.dir, "upload" + ext); video.save(up)
         info = _probe(up)
         err = None
         if not info or not info["audio"]: err = "We couldn't find any sound in this file. Record with your microphone on."
-        elif not info["video"]: err = "This file has no video track."
+        elif not info["video"] and mode != "voice": err = "This file has no video track."
         elif info["duration"] > C.MAX_VIDEO_SECONDS + 1: err = f"Recordings can be up to {C.MAX_VIDEO_SECONDS // 60} minutes."
         if err: Session.rollback(); shutil.rmtree(p.dir, ignore_errors=True); abort(400, err)
-        if ext == ".webm":  # browser recordings: normalise to MP4 (constant frame rate) once
+        if mode == "voice":  # voice only: keep the sound, put it on a plain vertical canvas (the face is never used)
+            mp4 = os.path.join(p.dir, "upload_v.mp4")
+            r_ = subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=0x0b1730:s=1080x1920:r=30", "-i", up,
+                                 "-map", "0:v", "-map", "1:a", "-shortest", "-c:v", "libx264", "-preset", "veryfast", "-tune", "stillimage",
+                                 "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", mp4], capture_output=True)
+            os.remove(up)
+            if r_.returncode: Session.rollback(); shutil.rmtree(p.dir, ignore_errors=True); abort(400, "We couldn't read this audio file.")
+            up = mp4
+        elif ext == ".webm":  # browser recordings: normalise to MP4 (constant frame rate) once
             mp4 = os.path.join(p.dir, "upload.mp4")
             subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", up, "-vf", "fps=30", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
                             "-c:a", "aac", "-b:a", "192k", mp4], check=True)
             os.remove(up); up = mp4
         _, _, src = pipeline.ingest(os.path.dirname(p.dir), up, p.id); os.remove(up)
         payload["src"] = src
-        subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", "1", "-i", src, "-frames:v", "1", "-vf", "scale=360:-2", os.path.join(p.dir, "thumb.jpg")])
+        if mode != "voice":
+            subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", "1", "-i", src, "-frames:v", "1", "-vf", "scale=360:-2", os.path.join(p.dir, "thumb.jpg")])
     vis = f.get("visuals") if f.get("visuals") in ("ai", "own", "basic") else None
     payload["visuals"] = {"mode": vis, "stock": f.get("stock") == "1"}
     if f.get("animations", "").isdigit(): payload["visuals"]["animations"] = min(4, int(f["animations"]))

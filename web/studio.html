@@ -168,8 +168,12 @@ async function waitJob(title){
 }
 async function openProject(id,keepView){
   PID=id;const r=await api('/api/projects/'+id);
-  if(r.status&&['working','queued'].includes(r.status.state)){await waitJob();return openProject(id)}
-  if(!r.plan){toast('This video is not ready yet.');return}
+  if(r.status&&['working','queued'].includes(r.status.state)){try{await waitJob()}catch(e){}return openProject(id)}
+  if(!r.plan){const why=(r.status&&r.status.state==='error'&&r.status.msg)||'This video could not be made.';
+    $('#newView').innerHTML=`<div class="card" style="max-width:560px;margin:40px auto;text-align:center"><h2>This video couldn't be made</h2><p class="mut">${esc(why)}</p>
+      <p class="mut">Nothing was charged for it. Delete it and try again — choose the language of the video if you can.</p>
+      <div style="display:flex;gap:10px;justify-content:center;margin-top:16px"><a class="btn pri" href="/app#/new" style="text-decoration:none">Make a new video</a><button class="btn" id="delFailed">Delete this one</button></div></div>`;
+    $('#delFailed').onclick=async()=>{await api('/api/projects/'+id,{method:'DELETE'});location.href='/app#/dashboard'};return}
   R=r;P=r.plan;AI=r.ai||null;
   $('#newView').classList.add('hide');$('#studio').classList.remove('hide');
   $('#undoBtn').classList.toggle('hide',!r.can_undo);$('#ptitle').textContent=r.title||'';

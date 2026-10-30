@@ -29,11 +29,11 @@ SMTP_USER, SMTP_PASSWORD, MAIL_FROM = env("SMTP_USER"), env("SMTP_PASSWORD"), en
 # (STRIPE_PRICE_<PLAN>). Change both together.
 PLANS = {
     "free":    {"name": "Free",    "price": 0,   "videos": 1,   "watermark": True,  "priority": False, "seats": 1, "ai_credits": 10,
-                "features": ["1 video per month", "10 AI credits (illustrations)", "All 4 creation modes", "Arabic, English, French", "MedReel watermark"]},
+                "features": ["1 video per month", "10 AI credits (illustrations)", "Video, in-browser or voice-only", "Arabic, English, French", "MedReel watermark"]},
     "starter": {"name": "Starter", "price": 49,  "videos": 8,   "watermark": False, "priority": False, "seats": 1, "ai_credits": 150,
                 "features": ["8 videos per month", "150 AI credits for illustrations & animations", "No watermark", "Your branding and logo", "Subtitles in 3 languages"]},
     "pro":     {"name": "Pro",     "price": 129, "videos": 30,  "watermark": False, "priority": True,  "seats": 1, "ai_credits": 500,
-                "features": ["30 videos per month", "500 AI credits for illustrations & animations", "Priority rendering", "AI scripts and teleprompter", "Everything in Starter"]},
+                "features": ["30 videos per month", "500 AI credits for illustrations & animations", "Priority rendering", "Everything in Starter"]},
     "clinic":  {"name": "Clinic",  "price": 349, "videos": 100, "watermark": False, "priority": True,  "seats": 5, "ai_credits": 1500,
                 "features": ["100 videos per month", "1,500 AI credits for illustrations & animations", "Up to 5 physicians (coming soon)", "Priority rendering", "Everything in Pro"]},
 }

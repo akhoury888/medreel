@@ -67,9 +67,9 @@ nav.top a.nl:hover,nav.top a.nl.on{background:rgba(27,36,56,.06)}
 .phone .badge b{display:block;font-family:var(--display);font-size:17px}
 section.block{padding:84px 0;border-bottom:1px solid var(--line)}
 section.block>.wrap>p.intro{max-width:40em;margin:14px 0 40px;font-size:18px;color:#2C3854}
-.ways{display:grid;grid-template-columns:repeat(2,1fr);gap:0;border:1.5px solid var(--ink);border-radius:20px;overflow:hidden;background:var(--white)}
+.ways{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1.5px solid var(--ink);border-radius:20px;overflow:hidden;background:var(--white)}
 .way{padding:28px;border-right:1.5px solid var(--ink);border-bottom:1.5px solid var(--ink);display:grid;grid-template-columns:52px 1fr;gap:16px}
-.way:nth-child(2n){border-right:0}.way:nth-child(n+3){border-bottom:0}
+.way{border-bottom:0}.way:last-child{border-right:0}
 .way svg{width:52px;height:52px}
 .way p{margin-top:6px;color:#2C3854}
 .langs{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
@@ -127,7 +127,7 @@ label.f .hint{display:block;font-weight:400;color:var(--steel);font-size:13px;ma
 .empty h3{margin-bottom:8px}
 
 /* wizard */
-.choose{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.choose{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
 .opt{background:var(--white);border:1.5px solid var(--line);border-radius:16px;padding:18px;cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:8px}
 .opt:hover{border-color:var(--steel)}
 .opt[aria-pressed=true]{border-color:var(--ink);box-shadow:4px 4px 0 var(--ink)}
@@ -207,13 +207,12 @@ textarea.script{min-height:220px;line-height:1.6;resize:vertical}
 </header>
 
 <section class="block"><div class="wrap">
-  <h2>Four ways to make a video</h2>
-  <p class="intro">Start from whatever you have: a recording, a script, a topic, or nothing but an idea.</p>
+  <h2>Three ways to make a video</h2>
+  <p class="intro">Film yourself, record right in the browser, or just use your voice if you'd rather not be on camera.</p>
   <div class="ways">
     <div class="way"><svg viewBox="0 0 52 52" aria-hidden="true"><rect x="13" y="4" width="26" height="44" rx="6" fill="none" stroke="#1B2438" stroke-width="2.5"/><circle cx="26" cy="22" r="7" fill="#C8233A"/></svg><div><h3>Upload a recording</h3><p>Film yourself on your phone. MedReel transcribes it, cuts the dead air and retakes, and builds the edit.</p></div></div>
-    <div class="way"><svg viewBox="0 0 52 52" aria-hidden="true"><rect x="6" y="8" width="24" height="36" rx="4" fill="none" stroke="#1B2438" stroke-width="2.5"/><path d="M11 17h14M11 24h14M11 31h9" stroke="#1B2438" stroke-width="2.5" stroke-linecap="round"/><rect x="30" y="18" width="16" height="26" rx="4" fill="#C8233A"/></svg><div><h3>Recording plus your script</h3><p>Captions use your exact words, even in dialect. The script is only matched to your voice for timing.</p></div></div>
-    <div class="way"><svg viewBox="0 0 52 52" aria-hidden="true"><rect x="9" y="6" width="34" height="40" rx="6" fill="none" stroke="#1B2438" stroke-width="2.5"/><path d="M15 14h22M15 20h22M15 26h14" stroke="#C8233A" stroke-width="2.5" stroke-linecap="round"/><circle cx="26" cy="37" r="4" fill="#1B2438"/></svg><div><h3>Write and record here</h3><p>Describe a topic, get a draft script to check and adjust, then read it from the teleprompter while your camera records.</p></div></div>
-    <div class="way"><svg viewBox="0 0 52 52" aria-hidden="true"><path d="M4 30h10l4-10 6 20 5-14 3 4h16" fill="none" stroke="#C8233A" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="8" width="44" height="36" rx="6" fill="none" stroke="#1B2438" stroke-width="2.5"/></svg><div><h3>No filming</h3><p>Turn a script into an animated video with an AI narrator. Clearly labelled as an AI voice, never a copy of yours.</p></div></div>
+    <div class="way"><svg viewBox="0 0 52 52" aria-hidden="true"><rect x="5" y="14" width="30" height="24" rx="5" fill="none" stroke="#1B2438" stroke-width="2.5"/><path d="M35 22l11-6v20l-11-6z" fill="#1B2438"/><circle cx="20" cy="26" r="5" fill="#C8233A"/></svg><div><h3>Record here</h3><p>Turn on your camera and talk. MedReel edits the take exactly like an upload.</p></div></div>
+    <div class="way"><svg viewBox="0 0 52 52" aria-hidden="true"><rect x="19" y="5" width="14" height="26" rx="7" fill="#C8233A"/><path d="M12 24c0 8 6 14 14 14s14-6 14-14M26 38v8M18 46h16" fill="none" stroke="#1B2438" stroke-width="2.5" stroke-linecap="round"/></svg><div><h3>Voice only</h3><p>Not comfortable on camera? Upload or record your voice — the video is built from medical animations and pictures, no face needed.</p></div></div>
   </div>
 </div></section>
 
@@ -317,10 +316,9 @@ textarea.script{min-height:220px;line-height:1.6;resize:vertical}
   <div class="page-head"><div><h2>New video</h2><p class="muted" id="newQuota"></p></div></div>
   <h3 style="margin-bottom:12px">How do you want to make it?</h3>
   <div class="choose" id="modes" role="group" aria-label="Creation mode">
-    <button class="opt" data-mode="auto_edit" aria-pressed="true"><svg viewBox="0 0 52 52" aria-hidden="true"><rect x="13" y="4" width="26" height="44" rx="6" fill="none" stroke="#1B2438" stroke-width="2.5"/><circle cx="26" cy="22" r="7" fill="#C8233A"/></svg><b>Upload a recording</b><span>We transcribe and edit it.</span></button>
-    <button class="opt" data-mode="own_script" aria-pressed="false"><svg viewBox="0 0 52 52" aria-hidden="true"><rect x="6" y="8" width="24" height="36" rx="4" fill="none" stroke="#1B2438" stroke-width="2.5"/><path d="M11 17h14M11 24h14M11 31h9" stroke="#1B2438" stroke-width="2.5" stroke-linecap="round"/><rect x="30" y="18" width="16" height="26" rx="4" fill="#C8233A"/></svg><b>Recording plus my script</b><span>Captions use your exact words.</span></button>
-    <button class="opt" data-mode="teleprompter" aria-pressed="false"><svg viewBox="0 0 52 52" aria-hidden="true"><rect x="9" y="6" width="34" height="40" rx="6" fill="none" stroke="#1B2438" stroke-width="2.5"/><path d="M15 14h22M15 20h22M15 26h14" stroke="#C8233A" stroke-width="2.5" stroke-linecap="round"/><circle cx="26" cy="37" r="4" fill="#1B2438"/></svg><b>Write and record here</b><span>Script, then teleprompter.</span></button>
-    <button class="opt" data-mode="ai_voice" aria-pressed="false"><svg viewBox="0 0 52 52" aria-hidden="true"><path d="M4 30h10l4-10 6 20 5-14 3 4h16" fill="none" stroke="#C8233A" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="8" width="44" height="36" rx="6" fill="none" stroke="#1B2438" stroke-width="2.5"/></svg><b>No filming</b><span>Animations and an AI narrator.</span></button>
+    <button class="opt" data-mode="auto_edit" aria-pressed="true"><svg viewBox="0 0 52 52" aria-hidden="true"><rect x="13" y="4" width="26" height="44" rx="6" fill="none" stroke="#1B2438" stroke-width="2.5"/><circle cx="26" cy="22" r="7" fill="#C8233A"/></svg><b>Upload a video</b><span>From your phone. We transcribe and edit it.</span></button>
+    <button class="opt" data-mode="rec" aria-pressed="false"><svg viewBox="0 0 52 52" aria-hidden="true"><rect x="5" y="14" width="30" height="24" rx="5" fill="none" stroke="#1B2438" stroke-width="2.5"/><path d="M35 22l11-6v20l-11-6z" fill="#1B2438"/><circle cx="20" cy="26" r="5" fill="#C8233A"/></svg><b>Record here</b><span>Use your camera now. We edit it the same way.</span></button>
+    <button class="opt" data-mode="voice" aria-pressed="false"><svg viewBox="0 0 52 52" aria-hidden="true"><rect x="19" y="5" width="14" height="26" rx="7" fill="#C8233A"/><path d="M12 24c0 8 6 14 14 14s14-6 14-14M26 38v8M18 46h16" fill="none" stroke="#1B2438" stroke-width="2.5" stroke-linecap="round"/></svg><b>Voice only</b><span>No face on screen. Animations and pictures over your voice.</span></button>
   </div>
 
   <div class="panel">
@@ -352,13 +350,12 @@ textarea.script{min-height:220px;line-height:1.6;resize:vertical}
   </div>
 
   <div class="panel hide" id="pRecord">
-    <h3>Record with the teleprompter</h3>
+    <h3>Record here</h3>
     <div class="tp">
-      <div class="cam"><video id="camv" class="mirror" autoplay muted playsinline></video><div class="prompter" id="prompter"><div id="prompterText"></div></div><div class="count hide" id="count"></div><div class="rec hide" id="recBadge">● REC <span id="recT">0:00</span></div></div>
+      <div class="cam"><video id="camv" class="mirror" autoplay muted playsinline></video><div class="prompter hide" id="prompter" style="display:none"><div id="prompterText"></div></div><div class="count hide" id="count"></div><div class="rec hide" id="recBadge">● REC <span id="recT">0:00</span></div></div>
       <div>
-        <p class="muted">Hold the phone upright at eye level, face a window, and read at your normal pace. The script scrolls on its own; adjust the speed while you record.</p>
-        <label class="f">Scroll speed<input type="range" id="tpSpeed" min="10" max="90" value="38"></label>
-        <label class="f">Text size<input type="range" id="tpSize" min="16" max="34" value="22"></label>
+        <p class="muted">Sit facing a window, camera at eye level, and talk naturally. Pauses, “ummm”s and restarts are removed for you.</p>
+        <input type="range" id="tpSpeed" value="0" hidden><input type="range" id="tpSize" value="22" hidden>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">
           <button class="btn" id="camOn" type="button">Turn on camera</button>
           <button class="btn red hide" id="recGo" type="button">Start recording</button>
@@ -369,6 +366,16 @@ textarea.script{min-height:220px;line-height:1.6;resize:vertical}
         <p class="err hide" id="camErr"></p>
       </div>
     </div>
+  </div>
+
+  <div class="panel hide" id="pVoice">
+    <h3>Your voice</h3>
+    <p class="muted small" style="margin:4px 0 12px">Talk about your topic as you would to a patient. Your face never appears — the screen shows medical animations, pictures and big subtitles.</p>
+    <div class="drop" id="aDrop" tabindex="0" role="button"><b>Drop an audio file here, or click to choose</b><div class="muted small">Voice memo, MP3, M4A or WAV · up to 10 minutes</div><div id="aName" style="margin-top:10px;font-weight:600"></div></div>
+    <input type="file" id="aFile" accept="audio/*,.m4a,.mp3,.wav,.aac,.ogg,.opus,.amr" hidden>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px"><span class="muted small">or</span>
+      <button class="btn" id="vRec" type="button">🎙 Record my voice now</button><button class="btn red hide" id="vStop" type="button">■ Stop <span id="vT">0:00</span></button></div>
+    <audio id="vPlay" controls class="hide" style="width:100%;margin-top:12px"></audio>
   </div>
 
   <div class="panel" id="pVis">
@@ -456,7 +463,7 @@ async function refreshMe(){const r=await api('/api/auth/me');ME=r.user;PLANS=r.p
   $('#navOut').classList.toggle('hide',!!ME);$('#navIn').classList.toggle('hide',!ME);return ME}
 const money=n=>`$${n}`;
 const LANG={auto:'Auto',en:'English',fr:'French',ar:'Arabic'};
-const MODE={auto_edit:'Uploaded recording',own_script:'Recording + script',teleprompter:'Teleprompter',ai_voice:'AI narration'};
+const MODE={auto_edit:'Video',voice:'Voice only',own_script:'Recording + script',teleprompter:'Teleprompter',ai_voice:'AI narration'};
 
 function planCards(el,billing){
   const keys=['free','starter','pro','clinic'];const cur=ME?ME.plan:null;
@@ -523,7 +530,7 @@ async function loadVids(){
 /* ---------- new video ---------- */
 let N={mode:'auto_edit',style:null,file:null,take:null,rec:null,stream:null};
 async function newView(){
-  mount('t-new');N={mode:'auto_edit',style:ME.default_style,file:null,take:null,rec:null,stream:null,vis:null,photos:[]};
+  mount('t-new');N={mode:'auto_edit',style:ME.default_style,file:null,take:null,rec:null,stream:null,vis:null,photos:[],audio:null};vRec=null;
   META=META||await api('/api/meta');
   setVis(META.ai_images&&(!ME.ai||ME.ai.left>0)?'ai':'basic');
   if(ME.ai&&META.ai_images)$('#visAiCost').textContent=`${ME.ai.left} AI credits left this month`;
@@ -547,6 +554,9 @@ async function newView(){
   $('#camOn').onclick=camOn;$('#recGo').onclick=recStart;$('#recStop').onclick=recStop;$('#recAgain').onclick=()=>{N.take=null;$('#takeOk').classList.add('hide');$('#recAgain').classList.add('hide');$('#recGo').classList.remove('hide');showLive()};
   $('#tpSize').oninput=e=>$('#prompterText').style.fontSize=e.target.value+'px';$('#prompterText').style.fontSize='22px';
   $('#nScript').oninput=()=>{$('#prompterText').textContent=$('#nScript').value||'Your script will scroll here.';scriptHint()};
+  $('#aDrop').onclick=()=>$('#aFile').click();$('#aFile').onchange=e=>pickAudio(e.target.files[0]);
+  $('#aDrop').ondragover=e=>{e.preventDefault()};$('#aDrop').ondrop=e=>{e.preventDefault();pickAudio(e.dataTransfer.files[0])};
+  $('#vRec').onclick=micStart;$('#vStop').onclick=()=>micStop(false);
   $('#makeBtn').onclick=make;
   setMode('auto_edit');loadTemplates();
 }
@@ -555,13 +565,13 @@ function addOwn(files){for(const f of files){if(!/^image\/(jpeg|png|webp)$/.test
 function drawOwn(){$('#phList').innerHTML=N.photos.map((f,i)=>`<div><img src="${URL.createObjectURL(f)}" alt=""><button type="button" data-rm="${i}" aria-label="Remove">×</button></div>`).join('');
   $$('#phList [data-rm]').forEach(b=>b.onclick=()=>{N.photos.splice(+b.dataset.rm,1);drawOwn()})}
 function setMode(m){N.mode=m;$$('#modes .opt').forEach(o=>o.setAttribute('aria-pressed',o.dataset.mode===m));
-  $('#pScript').classList.toggle('hide',m==='auto_edit');$('#pUpload').classList.toggle('hide',!['auto_edit','own_script'].includes(m));
-  $('#pRecord').classList.toggle('hide',m!=='teleprompter');$('#aiNote').classList.toggle('hide',m!=='ai_voice');
+  $('#pScript').classList.add('hide');$('#pUpload').classList.toggle('hide',m!=='auto_edit');$('#pVoice').classList.toggle('hide',m!=='voice');
+  $('#pRecord').classList.toggle('hide',m!=='rec');$('#aiNote').classList.add('hide');if(m!=='voice')micStop(true);
   $('#writerBox').classList.toggle('hide',m==='own_script');
   $('#scriptLabel').textContent=m==='own_script'?'What you said in the recording':(m==='ai_voice'?'Narration script':'Your script');
   $('#nScript').placeholder=m==='own_script'?'Paste the script you read, or type what you said. Small differences are fine.':'Write or paste what will be said.';
   $('#prompterText').textContent=$('#nScript').value||'Your script will scroll here.';scriptHint();
-  if(m!=='teleprompter')camOff()}
+  if(m!=='rec')camOff()}
 function scriptHint(){const w=($('#nScript').value.trim().match(/\S+/g)||[]).length;const lang=$('#nLang').value;const wps=lang==='ar'?2.0:2.45;
   $('#scriptHint').textContent=w?`${w} words · about ${Math.round(w/wps)} seconds spoken`:''}
 function pickFile(f){if(!f)return;if(!f.type.startsWith('video/')&&!/\.(mp4|mov|m4v|webm|mkv)$/i.test(f.name)){toast('Choose a video file.');return}
@@ -575,7 +585,21 @@ async function writeDraft(){const prompt=$('#wPrompt').value.trim();if(!prompt){
     $('#nScript').value=r.script;if(!$('#nTitle').value&&r.title)$('#nTitle').value=r.title;$('#nScript').dispatchEvent(new Event('input'));toast('Draft ready. Check every sentence before recording.')}
   catch(e){toast(e.message)}finally{b.disabled=false;b.textContent='Write a draft'}}
 
-/* teleprompter recording */
+/* voice only */
+let vRec=null,vChunks=[],vTimer=null;
+function pickAudio(f){if(!f)return;N.audio=f;$('#aName').textContent=`${f.name} · ${(f.size/1e6).toFixed(1)} MB`;const a=$('#vPlay');a.src=URL.createObjectURL(f);a.classList.remove('hide')}
+async function micStart(){try{const st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});
+    const type=['audio/webm;codecs=opus','audio/mp4','audio/webm'].find(t=>window.MediaRecorder&&MediaRecorder.isTypeSupported(t))||'';
+    vChunks=[];vRec=new MediaRecorder(st,type?{mimeType:type}:{});vRec.ondataavailable=e=>e.data.size&&vChunks.push(e.data);
+    vRec.onstop=()=>{st.getTracks().forEach(t=>t.stop());if(vRec._discard)return;const blob=new Blob(vChunks,{type:vRec.mimeType||'audio/webm'});
+      pickAudio(new File([blob],'voice.'+(blob.type.includes('mp4')?'m4a':'webm'),{type:blob.type}));$('#aName').textContent='Your recording ('+$('#vT').textContent+') — listen below, or record again.'};
+    vRec.start(1000);const t0=Date.now();$('#vRec').classList.add('hide');$('#vStop').classList.remove('hide');
+    vTimer=setInterval(()=>{const s=Math.floor((Date.now()-t0)/1000);$('#vT').textContent=`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;if(s>=600)micStop()},500)}
+  catch(e){toast('Microphone blocked. Allow it in your browser\'s address bar, then try again.')}}
+function micStop(discard){clearInterval(vTimer);if(vRec&&vRec.state!=='inactive'){vRec._discard=!!discard;vRec.stop()}
+  if($('#vRec')){$('#vRec').classList.remove('hide');if(vRec&&!discard)$('#vRec').textContent='🎙 Record again';$('#vStop').classList.add('hide')}}
+
+/* camera recording */
 let rafId=null,recStartT=0,scrollY=0,lastT=0,chunks=[];
 async function camOn(){$('#camErr').classList.add('hide');
   try{N.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:1080},height:{ideal:1920},aspectRatio:{ideal:9/16}},audio:{echoCancellation:true,noiseSuppression:true}});
@@ -584,35 +608,35 @@ async function camOn(){$('#camErr').classList.add('hide');
 function showLive(){const v=$('#camv');v.srcObject=N.stream;v.muted=true;v.controls=false;v.classList.add('mirror');v.play();$('#prompter').classList.remove('hide');scrollY=0;$('#prompterText').style.transform='translateY(0)'}
 function camOff(){if(N.stream){N.stream.getTracks().forEach(t=>t.stop());N.stream=null}cancelAnimationFrame(rafId);
   if($('#camOn')){$('#camOn').classList.remove('hide');$('#recGo').classList.add('hide');$('#recStop').classList.add('hide')}}
-async function recStart(){if(!$('#nScript').value.trim()){toast('Write the script first — it scrolls while you record.');return}
+async function recStart(){
   $('#recGo').classList.add('hide');const c=$('#count');c.classList.remove('hide');
   for(const n of [3,2,1]){c.textContent=n;await new Promise(r=>setTimeout(r,800))}c.classList.add('hide');
   const types=['video/mp4;codecs=avc1,mp4a','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
   const type=types.find(t=>window.MediaRecorder&&MediaRecorder.isTypeSupported(t))||'';
   chunks=[];N.rec=new MediaRecorder(N.stream,type?{mimeType:type,videoBitsPerSecond:6e6}:{});
   N.rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
-  N.rec.onstop=()=>{const blob=new Blob(chunks,{type:N.rec.mimeType||'video/webm'});N.take=new File([blob],'teleprompter.'+(blob.type.includes('mp4')?'mp4':'webm'),{type:blob.type});
+  N.rec.onstop=()=>{const blob=new Blob(chunks,{type:N.rec.mimeType||'video/webm'});N.take=new File([blob],'recording.'+(blob.type.includes('mp4')?'mp4':'webm'),{type:blob.type});
     const v=$('#camv');v.srcObject=null;v.src=URL.createObjectURL(blob);v.muted=false;v.controls=true;v.classList.remove('mirror');$('#prompter').classList.add('hide');
     $('#takeOk').textContent=`Take recorded (${$('#recT').textContent}). Watch it back, then make your video — or record again.`;$('#takeOk').classList.remove('hide');$('#recAgain').classList.remove('hide')};
   N.rec.start(1000);recStartT=performance.now();lastT=recStartT;$('#recStop').classList.remove('hide');$('#recBadge').classList.remove('hide');
-  const step=t=>{const dt=(t-lastT)/1000;lastT=t;scrollY+=dt*(+$('#tpSpeed').value);$('#prompterText').style.transform=`translateY(${-scrollY}px)`;
+  const step=t=>{lastT=t;
     const s=Math.floor((t-recStartT)/1000);$('#recT').textContent=`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
     if(s>=600){recStop();return}rafId=requestAnimationFrame(step)};rafId=requestAnimationFrame(step)}
 function recStop(){cancelAnimationFrame(rafId);if(N.rec&&N.rec.state!=='inactive')N.rec.stop();$('#recStop').classList.add('hide');$('#recBadge').classList.add('hide')}
 
 async function make(){
   const err=$('#newErr');err.classList.add('hide');const m=N.mode;const script=$('#nScript').value.trim();
-  const video=m==='teleprompter'?N.take:N.file;
-  if(['auto_edit','own_script'].includes(m)&&!video)return showErr(err,'Add your recording first.');
-  if(m==='teleprompter'&&!video)return showErr(err,'Record your take with the teleprompter first.');
-  if(m!=='auto_edit'&&!script)return showErr(err,'Add the script first.');
-  const fd=new FormData();fd.append('mode',m);fd.append('title',$('#nTitle').value);fd.append('language',$('#nLang').value);fd.append('style',N.style||'modern_educational');
-  if(script)fd.append('script',script);if(video)fd.append('video',video,video.name);
+  const video=m==='rec'?N.take:(m==='voice'?N.audio:N.file);
+  if(m==='auto_edit'&&!video)return showErr(err,'Add your video first.');
+  if(m==='rec'&&!video)return showErr(err,'Record your video first: turn on the camera, then press Start recording.');
+  if(m==='voice'&&!video)return showErr(err,'Add an audio file or record your voice first.');
+  const fd=new FormData();fd.append('mode',m==='rec'?'auto_edit':m);fd.append('title',$('#nTitle').value);fd.append('language',$('#nLang').value);fd.append('style',N.style||'modern_educational');
+  if(video)fd.append(m==='voice'?'audio':'video',video,video.name);
   if(N.vis==='own'&&!N.photos.length)return showErr(err,'Add your photos, or choose another option under “Pictures in your video”.');
   fd.append('visuals',N.vis||'basic');if(N.vis==='ai')fd.append('animations',$('#vAnim').value);if($('#vStock').checked)fd.append('stock','1');
   if(N.vis==='own')N.photos.forEach(f=>fd.append('photos',f,f.name));
   camOff();$('#makeBtn').disabled=true;const st=$('#status');st.classList.remove('hide');st.scrollIntoView({behavior:'smooth',block:'center'});
-  setSt(video?'Uploading your recording…':'Starting…',0,'');
+  setSt('Uploading your recording…',0,'');micStop(true);
   try{
     const r=await new Promise((res,rej)=>{const x=new XMLHttpRequest();x.open('POST','/api/projects');x.setRequestHeader('X-CSRF-Token',ME.csrf);
       x.upload.onprogress=e=>{if(e.lengthComputable)setSt('Uploading your recording…',e.loaded/e.total*0.15,`${Math.round(e.loaded/e.total*100)}%`)};
