@@ -210,7 +210,7 @@ function renderAll(){renderBoard();renderWords();renderLook();renderCheck();
 /* ======================= STORYBOARD ======================= */
 function kindOf(s){const g=s.graphic;if(g.asset==='icons')return'icons';if(g.asset==='photo')return g.fill?'ai':'photo';if(g.asset==='broll')return g.animated?'ai':'broll';return'med'}
 function nameOf(s){const g=s.graphic,k=kindOf(s);if(k==='icons')return g.label;if(k==='photo')return s.caption||'Your photo';if(k==='ai')return g.animated?'AI animation':'AI illustration';if(k==='broll')return'Stock video';return (META.assets[g.asset+'/'+g.mode]||g.label||'Animation').split(' — ')[0]}
-function thumbOf(s){const g=s.graphic;if(g.asset==='photo')return`/media/${PID}/photo_${g.mode}.jpg`;if(g.asset==='broll')return`/media/${PID}/broll_${g.mode}.jpg`;return null}
+function thumbOf(s){const g=s.graphic;if(g.asset==='gen')return`/media/${PID}/anim_${g.mode}.jpg`;if(g.asset==='photo')return`/media/${PID}/photo_${g.mode}.jpg`;if(g.asset==='broll')return`/media/${PID}/broll_${g.mode}.jpg`;return null}
 async function loadPhotos(){try{const r=await api(`/api/projects/${PID}/photos`);PHOTOS=r.items||(r.photos||[]).map(id=>({id,ai:false}))}catch(e){PHOTOS=[]}}
 
 async function renderBoard(){
@@ -300,7 +300,7 @@ function renderInspector(){
         <label class="f">Starts at (s)<div class="num"><button class="btn sm" data-n="a:-0.5">−</button><input id="iA" value="${a.toFixed(1)}"><button class="btn sm" data-n="a:0.5">＋</button></div></label>
         <label class="f">Duration (s)<div class="num"><button class="btn sm" data-n="d:-0.5">−</button><input id="iD" value="${(b-a).toFixed(1)}"><button class="btn sm" data-n="d:0.5">＋</button></div></label>
         <button class="btn sm" id="iApply">Apply time</button></div>${lay}
-      <div class="acts">${k==='ai'&&s.graphic.asset==='photo'?`<button class="btn sm" id="iAnim" ${canAI('animation')?'':'disabled'}>🎬 Animate (${AI?AI.cost.animation:10} credits)</button><button class="btn sm" id="iRegen" ${canAI('image')?'':'disabled'}>↻ New version (${AI?AI.cost.image:1} credit)</button>`:''}
+      <div class="acts">${s.graphic.asset==='gen'&&META.gen_anims?`<button class="btn sm" id="iRedesign">↻ New design (free)</button>`:''}${k==='ai'&&s.graphic.asset==='photo'?`<button class="btn sm" id="iAnim" ${canAI('animation')?'':'disabled'}>🎬 Animate (${AI?AI.cost.animation:10} credits)</button><button class="btn sm" id="iRegen" ${canAI('image')?'':'disabled'}>↻ New version (${AI?AI.cost.image:1} credit)</button>`:''}
         <button class="btn sm" id="iTog">${s.enabled===false?'👁 Show':'🙈 Hide'}</button><button class="btn sm" id="iDel" style="color:var(--bad)">🗑 Remove</button><button class="btn sm" id="iPlay">▶ Play here</button></div></div>`;
     $$('[data-n]').forEach(bn=>bn.onclick=()=>{const [f,dv]=bn.dataset.n.split(':');const el=f==='a'?$('#iA'):$('#iD');el.value=Math.max(f==='a'?0:1,(+el.value+ +dv)).toFixed(1)});
     $('#iApply').onclick=()=>{const na=+$('#iA').value,nd=+$('#iD').value;if(!(na>=0&&nd>=1))return toast('Check the numbers.');ops([{op:'scene_time',id:s.id,start_out:na,end_out:na+nd}])};
@@ -310,13 +310,16 @@ function renderInspector(){
     $('#iPlay').onclick=()=>{seekOut(a);$('#vid').play()};
     if($('#iAnim'))$('#iAnim').onclick=()=>animateScene(s.id);
     if($('#iRegen'))$('#iRegen').onclick=()=>createAI(sentenceAt(a+0.1),s.id);
+    if($('#iRedesign'))$('#iRedesign').onclick=()=>createGen(sentenceAt(a+0.1),s.id);
     return}
   if(SELS!=null){const s=P.analysis.sentences[SELS],TR=(P.captions.translations||{})[SELS];
     box.innerHTML=`<div class="insp"><b>Sentence at ${fmt1(toOut(s.start))}</b><div dir="auto" style="margin:6px 0;${AR()?'font-family:Tajawal,sans-serif;font-size:16px':''}">${esc(s.text)}</div>${TR?`<div class="mini" dir="auto">${esc(TR)}</div>`:''}
-      <div class="acts">${META.ai_images?`<button class="btn sm pri" id="sAI" ${canAI('image')?'':'disabled'}>✨ Create AI image here (${AI?AI.cost.image:1} credit)</button>`:''}<button class="btn sm" id="sPhoto">📷 Put one of my photos here</button></div></div>`;
+      ${META.gen_anims?`<label class="f" style="margin-top:8px">Animation idea <span class="mini">(optional — Claude decides if empty)</span><input id="genIdea" placeholder="e.g. show the airway narrowing, then the inhaler opening it"></label>`:''}
+      <div class="acts">${META.gen_anims?`<button class="btn sm pri" id="sGen">🎬 Create a medical animation here (free)</button>`:''}${META.ai_images?`<button class="btn sm${META.gen_anims?'':' pri'}" id="sAI" ${canAI('image')?'':'disabled'}>✨ Create AI image here (${AI?AI.cost.image:1} credit)</button>`:''}<button class="btn sm" id="sPhoto">📷 Put one of my photos here</button></div></div>`;
     if($('#sAI'))$('#sAI').onclick=()=>createAI(SELS);
+    if($('#sGen'))$('#sGen').onclick=()=>createGen(SELS);
     $('#sPhoto').onclick=()=>{LIB='photos';renderBoard();toast('Tap a photo, then tap the timeline — or drag it there.')};return}
-  box.innerHTML=`<p class="mini" style="margin-top:10px">Tip: click a block to change its timing, how it appears, or to animate an AI image. Click a sentence to create an AI image for it.</p>`;
+  box.innerHTML=`<p class="mini" style="margin-top:10px">Tip: click a block to change its timing or how it appears. Click a sentence to create a medical animation or an AI image for it.</p>`;
 }
 setInterval(()=>{const ph=$('#playh'),v=$('#vid');if(ph&&v&&view==='preview'&&TAB==='board')ph.style.left=(v.currentTime||0)*PX+'px'},120);
 
@@ -325,6 +328,11 @@ async function uploadPhotos(){const fs=[...$('#phF').files];if(!fs.length)return
     const r=await fetch(`/api/projects/${PID}/photos`,{method:'POST',body:fd,credentials:'same-origin',headers:{'X-CSRF-Token':CSRF}});
     const j=await r.json().catch(()=>({}));if(!r.ok){toast(j.error||'Upload failed');return}last=j.photo}
   PICK=last?{kind:'photo',id:last}:null;toast(fs.length>1?`${fs.length} photos added. Drag them onto the timeline.`:'Photo added. Drag it onto the timeline (or tap the timeline now).');renderBoard()}
+async function createGen(i,replace){
+  const idea=($('#genIdea')&&$('#genIdea').value.trim())||'';showProg('Claude is designing your animation (20–60 seconds)…',0.35,'🎬 Medical animation');
+  const r=await fetch(`/api/projects/${PID}/gen_anim`,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF},body:JSON.stringify({sentence:i,idea,replace:replace||''})});
+  const j=await r.json().catch(()=>({}));$('#prog').style.display='none';if(!r.ok){toast(j.error||'The animation could not be designed.');return}
+  try{await waitJob()}catch(e){}setStale(false);await openProject(PID);setVideo('preview');toast('Animation added — watch it in the preview. Not right? Click it and press “New design”.')}
 async function createAI(i,replace){
   if(i==null){const v=$('#vid');i=SELS!=null?SELS:sentenceAt(view==='preview'?(v.currentTime||0):0)}
   const brief=($('#aiBrief')&&$('#aiBrief').value.trim())||'';showProg('Creating your illustration (10–30 seconds)…',0.3,'✨ AI illustration');

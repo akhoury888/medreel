@@ -70,7 +70,7 @@ def meta():
                     "captions": planner.CAPTION_STYLES, "music": planner.MUSIC_TRACKS, "assets": graphics.ASSET_INFO,
                     "brand_defaults": planner.DEFAULT_BRAND, "modes": pipeline.MODES,
                     "voices": {l: synth.available(l) for l in ("en", "fr", "ar")},
-                    "ai_scripts": bool(os.environ.get("ANTHROPIC_API_KEY")), "stock": _stock_credit(), "ai_images": bool(os.environ.get("FAL_KEY")), "models_ready": jobs.models_ready(),
+                    "ai_scripts": bool(os.environ.get("ANTHROPIC_API_KEY")), "stock": _stock_credit(), "ai_images": bool(os.environ.get("FAL_KEY")), "gen_anims": bool(os.environ.get("ANTHROPIC_API_KEY")), "models_ready": jobs.models_ready(),
                     "projects": [p.id for p in Session.scalars(select(Project).where(Project.user_id == current_user().id).order_by(Project.created_at.desc()).limit(20))]})
 
 
@@ -369,6 +369,38 @@ def ai_image(pid):
     return jsonify({**res, "photo": photo, "brief": brief})
 
 
+@bp.post("/api/projects/<pid>/gen_anim")
+@login_required
+def gen_anim(pid):
+    """Claude designs a medical animation for one sentence (free for the doctor; capped per video).
+    replace=<scene id> swaps an existing AI-designed animation for a new design."""
+    from engine import motion, commands
+    p = _own(pid)
+    if _busy(p): abort(409, "Wait until the first edit is finished.")
+    if not motion.available(): abort(503, "AI animations need the Claude key (ANTHROPIC_API_KEY).")
+    b = request.get_json(force=True, silent=True) or {}
+    plan = json.load(open(_plan_path(p)))
+    made = len(os.listdir(os.path.join(p.dir, "anims"))) // 2 if os.path.isdir(os.path.join(p.dir, "anims")) else 0
+    if made >= int(os.environ.get("MEDREEL_GEN_MAX", "12")): abort(429, "This video already has many AI animations — remove one or reuse it.")
+    sents = plan["analysis"]["sentences"]
+    try: i = int(b.get("sentence"))
+    except (TypeError, ValueError): abort(400, "Choose a sentence.")
+    if not 0 <= i < len(sents): abort(400, "Choose a sentence.")
+    try:
+        sid, title = motion.create_for_sentence(plan, p.dir, i, (b.get("idea") or "").strip()[:300])
+    except Exception as e:
+        if "401" in str(e): abort(502, "The Claude key was refused — check ANTHROPIC_API_KEY in your .env file.")
+        if "402" in str(e) or "400" in str(e): abort(502, "Claude refused the request — check that your Anthropic account has credit.")
+        abort(502, f"Claude didn't answer ({str(e)[:80]}). Try again.")
+    if not sid: abort(502, "The animation could not be designed this time — try again, or describe what you want in the box.")
+    ops = []
+    if b.get("replace"): ops.append({"op": "delete_scene", "id": str(b["replace"])[:40]})
+    ops.append({"op": "add_gen", "scene": sid, "sentence": i, "title": title})
+    res = commands.execute_ops(_plan_path(p), ops, label="AI medical animation")
+    jobs.enqueue(p, "preview", priority=_prio())
+    return jsonify({**res, "scene": sid})
+
+
 @bp.post("/api/projects/<pid>/animate")
 @login_required
 def animate_scene(pid):
@@ -425,6 +457,8 @@ def media(pid, name):
     if name.startswith("source.") and "/" not in name: return send_from_directory(p.dir, name, conditional=True)
     m = re.fullmatch(r"photo_([0-9a-f]{12})\.jpg", name)
     if m: return send_from_directory(os.path.join(p.dir, "photos"), m.group(1) + ".jpg", conditional=True)
+    m = re.fullmatch(r"anim_([0-9a-f]{12})\.jpg", name)
+    if m: return send_from_directory(os.path.join(p.dir, "anims"), m.group(1) + ".jpg", conditional=True)
     m = re.fullmatch(r"broll_(p[xb]\d{1,12}|ai[0-9a-f]{12})\.jpg", name)
     if m: return send_from_directory(os.path.join(p.dir, "broll"), m.group(1) + ".jpg", conditional=True)
     if name not in allowed: abort(404)

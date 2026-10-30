@@ -88,6 +88,15 @@ def _stock(plan, d, p, ai_budget=None, visuals=None):
     mode = v.get("mode") or ("ai" if imagegen.available() else "basic")
     plan["visuals"] = {"mode": mode, "stock": bool(v.get("stock"))}
     plan["ai_usage"] = {"image": 0, "animation": 0}
+    from . import motion
+    n_gen = int(v.get("gen", os.environ.get("MEDREEL_GEN_ANIMS", "2" if plan.get("presenter", True) else "3")))
+    if motion.available() and n_gen > 0:  # Claude designs medical animations for the key moments (free for the doctor)
+        p(0.76, "Designing medical animations for your key points…")
+        try:
+            import time as _tg; t_g = _tg.time()
+            k = motion.auto(plan, d, n_gen)
+            _plog.info("AI-designed animations: %d in %.0fs", k, _tg.time() - t_g)
+        except Exception: _plog.exception("AI animations")
     if mode == "own":
         p(0.76, "Placing your photos…")
         try: _place_own_photos(plan, v.get("photos") or [])

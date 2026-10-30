@@ -482,6 +482,8 @@ def render(plan, out_path, workdir, preview=False, progress=None, log=print):
     kw_pills = [(tl.to_out(e["start"]), e["term"]) for e in plan.get("emphasis", []) if e.get("enabled", True) and e.get("term")]
     pill_cache = {}
     GP.PHOTO_DIR = os.path.join(os.path.dirname(os.path.abspath(src["path"])), "photos")
+    from . import motion as MO
+    MO.GEN_DIR = os.path.join(os.path.dirname(os.path.abspath(src["path"])), "anims")
     GP.BROLL_DIR = os.path.join(os.path.dirname(os.path.abspath(src["path"])), "broll"); GP._READERS.clear()
     ov_y = {}
     zp = plan["zoom"]; tr = plan["style_params"].get("transition", 0.4)

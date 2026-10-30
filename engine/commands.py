@@ -209,7 +209,7 @@ def _edit_sentence(plan, si, text):
 
 def _paid(sc):
     g = sc.get("graphic", {})
-    return bool(g.get("fill") or g.get("animated") or (g.get("asset") == "photo"))
+    return bool(g.get("fill") or g.get("animated") or g.get("asset") in ("photo", "gen"))
 
 
 def _make_room(scenes, a, b, keep_icons=False):
@@ -290,6 +290,16 @@ def apply(plan, op):
             sents = plan["analysis"]["sentences"]; i = int(op["sentence"])
             if not 0 <= i < len(sents): return "Unknown sentence."
             op["src_range"] = (sents[i]["start"] - 0.1, sents[i]["end"] + 0.3); op["phrase"] = ""
+    if o == "add_gen":  # an AI-designed medical animation (anims/<id>.json, written by engine.motion)
+        sid = str(op.get("scene", ""))
+        if not re.fullmatch(r"[0-9a-f]{12}", sid): return "Unknown animation."
+        title = str(op.get("title") or "Medical animation")[:40]
+        op = {**op, "op": "add_graphic", "asset": f"gen/{sid}", "layout": op.get("layout") or ("split" if plan.get("presenter", True) else "full_graphic"), "_title": title}
+        o = "add_graphic"
+        if op.get("sentence") is not None:
+            sents = plan["analysis"]["sentences"]; i = int(op["sentence"])
+            if not 0 <= i < len(sents): return "Unknown sentence."
+            op["src_range"] = (sents[i]["start"] - 0.1, sents[i]["end"] + 0.3); op["phrase"] = ""
     if o == "delete_scene":
         n = len(plan["scenes"]); plan["scenes"] = [x for x in plan["scenes"] if x["id"] != op.get("id")]
         return "Removed." if len(plan["scenes"]) < n else "Nothing to remove."
@@ -307,6 +317,7 @@ def apply(plan, op):
             a, _ = tl.to_src(float(op.get("t_out") or 0)); b = a + 5
             if op.get("dur"): b = a + max(1.0, min(20.0, float(op["dur"])))
         if b - a < 4.5 and not op.get("dur"): b = a + 4.5
+        if asset == "gen" and not op.get("dur"): b = min(max(b, a + 5.0), a + 9.0)
         if asset in ("photo", "broll") and not op.get("dur"): b = min(max(b, a + (4.0 if asset == "photo" else 3.5)), a + (7.0 if asset == "photo" else 6.0))
         default_layout = "split" if asset == "photo" else "pip" if asset == "broll" else {"stent": "pip", "occlusion": "split", "narrowing": "side", "sinus": "side", "gauge": "labels", "calcium": "split",
                           "scanner": "split", "coronaries": "split"}.get(mode, "split")
@@ -315,8 +326,9 @@ def apply(plan, op):
                                "graphic": {"asset": asset, "mode": mode, "label": "Photo" if asset == "photo" else "Stock video" if asset == "broll" else op["asset"]}, "text": s["text"] if s else "",
                                "auto": False, "enabled": True, **({"caption": str(op.get("caption") or "")[:80]} if asset == "photo" else {})})
         if asset == "photo" and op.get("fill"): plan["scenes"][-1]["graphic"]["fill"] = True
+        if asset == "gen": plan["scenes"][-1]["graphic"].update({"label": op.get("_title") or "AI animation", "gen": True})
         plan["scenes"].sort(key=lambda x: x["start"])
-        what = ("illustration" if op.get("fill") else "photo") if asset == "photo" else "stock video" if asset == "broll" else f"{op['asset'].replace('/', ' ')} animation"
+        what = ("illustration" if op.get("fill") else "photo") if asset == "photo" else "stock video" if asset == "broll" else "medical animation" if asset == "gen" else f"{op['asset'].replace('/', ' ')} animation"
         return f"Added the {what} at {tl.to_out(a):.1f}s ({op.get('layout') or default_layout} layout)."
     if o == "remove_graphics":
         before = len(plan["scenes"])
