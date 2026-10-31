@@ -338,6 +338,30 @@ textarea.script{min-height:220px;line-height:1.6;resize:vertical}
     </div>
   </div>
 
+  <div class="panel" id="pDesign">
+    <h3>🎨 Design your video</h3>
+    <p class="muted small" style="margin:4px 0 14px" id="dzHint">Pick a look, then change anything you like. The example shows exactly what each choice does — add your video below and it uses your own image.</p>
+    <div class="dz">
+      <div class="pvwrap"><div class="pvphone"><video id="pvVid" autoplay muted loop playsinline></video><div class="pvload" id="pvLoad"><span class="spin"></span>Preparing the preview…</div>
+        <button type="button" class="pvsnd" id="pvSnd" title="Sound">🔇</button><span class="pvtag" id="pvTag">Example</span></div>
+        <p class="muted small" style="text-align:center;margin-top:8px">Loops every 7 seconds · tap 🔇 to hear the music</p></div>
+      <div class="dzopts">
+        <label class="f" style="margin-top:0">Look</label><div class="chips" id="nStyles" role="group" aria-label="Look"></div>
+        <label class="small" style="display:block;margin-top:8px"><input type="checkbox" id="nBrand"> Always use my brand colours</label>
+        <label class="f">Colours</label><div class="pals" id="dPal"></div>
+        <div class="row2">
+          <label class="f">Subtitles<select id="dCap" data-k="captions"></select></label>
+          <label class="f">How pictures appear<select id="dTr" data-k="transition"></select></label>
+          <label class="f">Video frame<select id="dFr" data-k="frame"></select></label>
+          <label class="f">Opening title<select id="dTi" data-k="title"></select></label>
+          <label class="f">Background<select id="dBg" data-k="bg"></select></label>
+          <label class="f">Music<span style="display:flex;gap:8px"><select id="dMus" data-k="music" style="flex:1"></select><button type="button" class="btn" id="dListen" style="padding:8px 12px">▶</button></span></label>
+        </div>
+        <button type="button" class="btn" id="dReset" style="margin-top:14px">↺ Back to the look's settings</button>
+      </div>
+    </div>
+  </div>
+
   <div class="panel hide" id="pScript">
     <h3>Script</h3>
     <div id="writerBox">
@@ -406,30 +430,6 @@ textarea.script{min-height:220px;line-height:1.6;resize:vertical}
   </div>
 
   <div class="notice hide" id="aiNote">Narration uses a generic AI voice (male in English and Arabic, female in French), never a copy of your voice. The end card says “AI voice”, which Instagram and TikTok expect for synthetic audio.</div>
-  <div class="panel" id="pDesign">
-    <h3>Design</h3>
-    <p class="muted small" style="margin:4px 0 14px" id="dzHint">Pick a look, then change anything you like. The example shows exactly what each choice does — add your video above and it uses your own image.</p>
-    <div class="dz">
-      <div class="pvwrap"><div class="pvphone"><video id="pvVid" autoplay muted loop playsinline></video><div class="pvload" id="pvLoad"><span class="spin"></span>Preparing the preview…</div>
-        <button type="button" class="pvsnd" id="pvSnd" title="Sound">🔇</button><span class="pvtag" id="pvTag">Example</span></div>
-        <p class="muted small" style="text-align:center;margin-top:8px">Loops every 7 seconds · tap 🔇 to hear the music</p></div>
-      <div class="dzopts">
-        <label class="f" style="margin-top:0">Look</label><div class="chips" id="nStyles" role="group" aria-label="Look"></div>
-        <label class="small" style="display:block;margin-top:8px"><input type="checkbox" id="nBrand"> Always use my brand colours</label>
-        <label class="f">Colours</label><div class="pals" id="dPal"></div>
-        <div class="row2">
-          <label class="f">Subtitles<select id="dCap" data-k="captions"></select></label>
-          <label class="f">How pictures appear<select id="dTr" data-k="transition"></select></label>
-          <label class="f">Video frame<select id="dFr" data-k="frame"></select></label>
-          <label class="f">Opening title<select id="dTi" data-k="title"></select></label>
-          <label class="f">Background<select id="dBg" data-k="bg"></select></label>
-          <label class="f">Music<span style="display:flex;gap:8px"><select id="dMus" data-k="music" style="flex:1"></select><button type="button" class="btn" id="dListen" style="padding:8px 12px">▶</button></span></label>
-        </div>
-        <button type="button" class="btn" id="dReset" style="margin-top:14px">↺ Back to the look's settings</button>
-      </div>
-    </div>
-  </div>
-
   <div class="err hide" id="newErr"></div>
   <div style="display:flex;gap:12px;align-items:center;margin-top:22px;flex-wrap:wrap"><button class="btn red" id="makeBtn" type="button">Make my video</button><span class="muted small">Your original recording is never modified.</span></div>
   <div class="status hide" id="status"><h3 id="stT">Uploading…</h3><div class="bar"><i id="stBar"></i></div><p class="muted" id="stMsg"></p></div>
