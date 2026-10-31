@@ -10,6 +10,7 @@ Run inside the MedReel container (it already has FAL_KEY and ELEVENLABS_API_KEY)
 Options: en | fr | ar | lb (Lebanese Arabic)   --new-face (make a different doctor)   --male (a male doctor)   --pro (sharper lips, ~2x price)
          --audio=/data/presenter/my_voice.m4a   use a real voice recording instead of the AI voice (best for Lebanese)
          --text="..."                           your own script for the AI voice
+         --change-voice                         with --audio: turn your recording into another person's voice (same accent and rhythm)
 Cost: about $1 per 18-second clip (standard) + a few cents for the photo.
 The presenter is AI-generated: label it as such in ads, and never present it as a real doctor or patient testimonial."""
 import base64, json, os, sys, time, urllib.request, urllib.error
@@ -70,6 +71,31 @@ def voice(lang, text=None, male=False):
     return p
 
 
+def change_voice(path, male=True):
+    """ElevenLabs Voice Changer (speech-to-speech): same words, accent and timing, a different voice — so nobody recognises you."""
+    import uuid as _u
+    vid = os.environ.get("PRESENTER_VOICE") or ("pNInz6obpgDQGcFmaJgB" if male else VOICE)
+    say("changing the voice (ElevenLabs Voice Changer)…")
+    b = "----medreel" + _u.uuid4().hex
+    parts = [f'--{b}\r\nContent-Disposition: form-data; name="model_id"\r\n\r\neleven_multilingual_sts_v2\r\n'.encode(),
+             f'--{b}\r\nContent-Disposition: form-data; name="remove_background_noise"\r\n\r\ntrue\r\n'.encode(),
+             f'--{b}\r\nContent-Disposition: form-data; name="audio"; filename="voice.mp3"\r\nContent-Type: audio/mpeg\r\n\r\n'.encode() + open(path, "rb").read() + b"\r\n",
+             f"--{b}--\r\n".encode()]
+    req = urllib.request.Request(f"https://api.elevenlabs.io/v1/speech-to-speech/{vid}?output_format=mp3_44100_128", b"".join(parts),
+                                 {"xi-api-key": os.environ["ELEVENLABS_API_KEY"], "Content-Type": f"multipart/form-data; boundary={b}"})
+    out = os.path.join(OUT, os.path.splitext(os.path.basename(path))[0] + "_changed.mp3")
+    try:
+        open(out, "wb").write(urllib.request.urlopen(req, timeout=180).read())
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode()[:300]
+        if "permission" in detail.lower() or e.code in (401, 403):
+            sys.exit("ElevenLabs refused the Voice Changer. In elevenlabs.io → Developers → API keys, edit your key and turn ON "
+                     "'Speech to Speech'. Then run this again.\n" + detail)
+        sys.exit(f"ElevenLabs error {e.code}: {detail}")
+    say(f"new voice saved: {out}")
+    return out
+
+
 def talk(img, audio, lang, pro=False):
     mime = {".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".wav": "audio/wav", ".ogg": "audio/ogg", ".aac": "audio/aac"}.get(os.path.splitext(audio)[1].lower(), "audio/mpeg")
     model = "fal-ai/kling-video/ai-avatar/v2/" + ("pro" if pro else "standard")
@@ -104,5 +130,6 @@ if __name__ == "__main__":
         subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", own, "-ac", "1", "-ar", "44100", "-af", "highpass=f=80,loudnorm=I=-16:TP=-1.5",
                         "-b:a", "160k", clean], check=True)
         say(f"using your recording: {own}")
+        if "--change-voice" in args: clean = change_voice(clean, male)
     talk(face("--new-face" in args, male), clean if own else voice(lang, text, male), lang, "--pro" in args)
     say(f"finished in {int(time.time() - t0)} s")
