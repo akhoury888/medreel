@@ -28,10 +28,12 @@ SCRIPTS = {
     "ar": "هل تعلم أن ارتفاع الكوليسترول عادةً لا يسبب أي أعراض؟ مع السنين، يتراكم داخل الشرايين ويضيّقها. "
           "لهذا فحص دم بسيط مهم جداً. افحص الكوليسترول، واسأل طبيبك عن صحة قلبك.",
 }
-FACE_PROMPT = ("Photorealistic vertical portrait of a fictional friendly female doctor in her late thirties, white coat over a navy top, "
-               "stethoscope around the neck, looking straight at the camera with a warm natural expression, mouth closed, head and shoulders "
-               "centred in the upper half of the frame, modern bright clinic softly blurred behind, soft window light, sharp focus on the face, "
-               "natural skin texture, shot on a 50mm lens, no text, no logo")
+FACE_PROMPT = ("Candid vertical photo taken with a smartphone front camera, a fictional ordinary-looking female doctor in her late thirties "
+               "sitting in her real consultation room, looking at the camera, mouth closed, relaxed natural expression, slightly asymmetrical face, "
+               "visible skin texture with pores and fine lines, a few stray hairs, slightly wrinkled white coat over a navy top, stethoscope, "
+               "ordinary office behind her: desk, shelves with folders, a window with daylight, slightly cluttered, mixed indoor lighting, "
+               "head and shoulders in the upper half of the frame, natural colours, slight phone-camera noise, not retouched, not a studio photo, "
+               "not glossy, no makeup look, no text, no logo")
 VOICE = os.environ.get("PRESENTER_VOICE", "21m00Tcm4TlvDq8ikWAM")  # an ElevenLabs premade voice (change to any voice id you like)
 
 
@@ -43,7 +45,7 @@ def face(new=False, male=False):
     if os.path.exists(p) and not new: say("using the existing face (add --new-face for another one)"); return p
     say("creating the doctor's photo (FLUX.2)…")
     hdr = {"Authorization": f"Key {os.environ['FAL_KEY']}", "Content-Type": "application/json"}
-    prompt = FACE_PROMPT.replace("female doctor in her late thirties", "male doctor in his early forties, short dark hair, neat beard") if male else FACE_PROMPT
+    prompt = FACE_PROMPT.replace("female doctor in her late thirties", "male doctor in his early forties, short dark hair, short slightly uneven beard").replace("her ", "his ").replace(" she ", " he ") if male else FACE_PROMPT
     body = {"prompt": prompt, "image_size": {"width": 720, "height": 1280}, "output_format": "jpeg", "enable_safety_checker": True}
     res = json.loads(urllib.request.urlopen(urllib.request.Request(f"https://fal.run/{FAL_MODEL}", json.dumps(body).encode(), hdr), timeout=180).read())
     url = res["images"][0]["url"]
@@ -102,7 +104,7 @@ def talk(img, audio, lang, pro=False):
     say(f"making the photo speak ({model}) — usually 2-6 minutes…")
     uri = lambda path, mime: f"data:{mime};base64," + base64.b64encode(open(path, "rb").read()).decode()
     res = _fal_queue(model, {"image_url": uri(img, "image/jpeg"), "audio_url": uri(audio, mime),
-                             "prompt": "A friendly doctor explaining calmly to the camera, natural small head movements and blinks, professional, steady camera"},
+                             "prompt": "A doctor talking naturally to his phone camera like a real social media video: relaxed, natural head movements, normal blinking, small hand-held camera movement, realistic, not exaggerated"},
                      timeout=1500, on_status=lambda m: say(m))
     url = (res.get("video") or {}).get("url")
     if not url: sys.exit("no video returned: " + json.dumps(res)[:300])
