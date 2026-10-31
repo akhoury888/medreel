@@ -127,7 +127,7 @@ if __name__ == "__main__":
     if own:
         import subprocess  # a real voice recording: tidy it (mono, loudness) so the lips follow it well
         clean = os.path.join(OUT, f"voice_{lang}_own.mp3")
-        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", own, "-ac", "1", "-ar", "44100", "-af", "highpass=f=80,loudnorm=I=-16:TP=-1.5",
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", own, "-vn", "-map", "0:a:0", "-ac", "1", "-ar", "44100", "-af", "highpass=f=80,loudnorm=I=-16:TP=-1.5",
                         "-b:a", "160k", clean], check=True)
         say(f"using your recording: {own}")
         if "--change-voice" in args: clean = change_voice(clean, male)
