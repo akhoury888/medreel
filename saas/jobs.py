@@ -58,6 +58,28 @@ def _brand_for(user, plan_name):
     return b
 
 
+def _notify(user, project, kind):
+    """'Your video is ready' email (first edit or export), sent in the background; never blocks or fails a job."""
+    if getattr(user, "notify_email", True) is False: return
+    link = f"{C.PUBLIC_URL}/studio#{project.id}"
+    title = (project.title or "your video")[:80]
+    if kind == "generate":
+        subject = f"Your video is edited: {title}"
+        body = (f"Hello {user.name or ''},\n\nMedReel has finished editing \"{title}\": subtitles, cuts, animations and music are in place.\n"
+                f"Open it to review, change anything you like, then export:\n{link}\n\n— MedReel")
+    else:
+        subject = f"Ready to post: {title}"
+        body = (f"Hello {user.name or ''},\n\nYour video \"{title}\" is exported in full quality (1080x1920).\n"
+                f"Download it, with its cover image and a ready-to-post caption:\n{link}\n\n— MedReel")
+    def go():
+        try:
+            from .auth import send_mail
+            send_mail(user.email, subject, body)
+        except Exception:
+            log.exception("ready email")
+    threading.Thread(target=go, daemon=True).start()
+
+
 def run_job(j):
     from engine import pipeline
     s = Session()
@@ -121,11 +143,18 @@ def run_job(j):
             import subprocess
             subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", f"{min(4.0, res['duration'] / 2):.2f}", "-i", res["path"], "-frames:v", "1",
                             "-vf", "scale=360:-2", os.path.join(p.dir, "thumb.jpg")])
-        if kind == "final": p.exported_at = now()
+        if kind == "final":
+            p.exported_at = now()
+            try:  # cover images for the post, in the video's design
+                from engine import postkit
+                postkit.covers(json.load(open(plan_path)), p.dir)
+            except Exception:
+                log.exception("cover")
         msg = ("Preview ready." if kind == "preview" else "Your video is ready to download.")
         s.execute(update(Job).where(Job.id == j.id).values(state="done", progress=1.0, message=msg, finished_at=now(),
                                                            result=json.dumps({"duration": res["duration"], "seconds": res["seconds"], "kind": kind})))
         s.commit()
+        if j.kind in ("generate", "final"): _notify(u, p, j.kind)
     except Exception as e:
         log.error("job %s failed\n%s", j.id, traceback.format_exc())
         s.rollback()

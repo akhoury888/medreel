@@ -215,6 +215,8 @@ def get_project(pid):
     return jsonify({"id": p.id, "title": p.title, "mode": p.mode, "status": jobs.job_payload(jobs.latest(p.id)), "plan": plan,
                     "ai": ai_status(Session, current_user(), p.id),
                     "renders": {k: os.path.exists(os.path.join(p.dir, "renders", k + ".mp4")) for k in ("preview", "final")},
+                    "covers": {k: int(os.path.getmtime(os.path.join(p.dir, "renders", k + ".jpg"))) for k in ("cover", "square")
+                               if os.path.exists(os.path.join(p.dir, "renders", k + ".jpg"))},
                     "can_undo": os.path.exists(hist) and len(json.load(open(hist))) > 0})
 
 
@@ -408,6 +410,36 @@ def ai_image(pid):
     return jsonify({**res, "photo": photo, "brief": brief})
 
 
+@bp.post("/api/projects/<pid>/post")
+@login_required
+def post_caption(pid):
+    """Ready-to-post caption + hashtags (Claude, or a template without a key). Saved in the plan per language."""
+    from engine import postkit, planner
+    p = _own(pid)
+    b = request.get_json(force=True, silent=True) or {}
+    plan_path = _plan_path(p); plan = json.load(open(plan_path))
+    lang = b.get("lang") if b.get("lang") in ("ar", "en", "fr") else plan.get("language", "en")
+    if "text" in b:  # the doctor edited the text: keep their version
+        plan.setdefault("post", {})[lang] = {"text": str(b["text"])[:3000], "hashtags": [str(h)[:60] for h in (b.get("hashtags") or [])][:20], "by": "doctor", "lang": lang}
+    else:
+        plan.setdefault("post", {})[lang] = postkit.caption(plan, lang)
+    json.dump(plan, open(plan_path, "w"), indent=1, ensure_ascii=False)
+    return jsonify(plan["post"][lang])
+
+
+@bp.post("/api/projects/<pid>/cover")
+@login_required
+def make_cover(pid):
+    """Cover images for the post (1080x1920 and 1080x1080) in the video's design."""
+    from engine import postkit
+    p = _own(pid)
+    try:
+        postkit.covers(json.load(open(_plan_path(p))), p.dir)
+    except Exception as e:
+        abort(400, f"The cover could not be made ({str(e)[:80]}).")
+    return jsonify({"ok": True, "covers": {k: int(os.path.getmtime(os.path.join(p.dir, "renders", k + ".jpg"))) for k in ("cover", "square")}})
+
+
 @bp.post("/api/projects/<pid>/gen_anim")
 @login_required
 def gen_anim(pid):
@@ -491,7 +523,7 @@ def delete(pid):
 @login_required
 def media(pid, name):
     p = _own(pid)
-    allowed = {"preview.mp4": "renders", "final.mp4": "renders", "plan.json": ".", "thumb.jpg": "."}
+    allowed = {"preview.mp4": "renders", "final.mp4": "renders", "plan.json": ".", "thumb.jpg": ".", "cover.jpg": "renders", "square.jpg": "renders"}
     allowed.update({f"{k}{x}.srt": "renders" for k in ("preview", "final") for x in ("", ".en", ".fr", ".ar")})
     if name.startswith("source.") and "/" not in name: return send_from_directory(p.dir, name, conditional=True)
     m = re.fullmatch(r"photo_([0-9a-f]{12})\.jpg", name)

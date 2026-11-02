@@ -86,6 +86,9 @@ details summary{cursor:pointer;font-weight:600;margin:10px 0;color:var(--ink)}
 .insp{margin-top:12px;border:1px solid var(--line);border-radius:12px;padding:12px;background:#fffdfd}
 .insp .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .num{display:flex;align-items:center;gap:4px;margin-top:4px}label.f .num input,.num input{display:inline-block;width:70px;margin:0;padding:6px;border:1px solid var(--line);border-radius:8px;text-align:center}
+.postgrid{display:grid;grid-template-columns:240px 1fr;gap:18px}.covers{display:flex;gap:8px;align-items:flex-start}.covers img{width:110px;border-radius:10px;box-shadow:0 6px 16px rgba(0,0,0,.18)}.covers img.sq{width:110px}
+#postText{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit;font-size:14px;resize:vertical}#postTags{width:100%;margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font:inherit;font-size:13px;color:#2563a8}
+@media(max-width:700px){.postgrid{grid-template-columns:1fr}}
 .legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--mut);margin-top:6px}.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 /* words / look */
 .words{line-height:2.1}.w{padding:2px 3px;border-radius:5px;cursor:pointer}.w:hover{background:#fbeef0}.w.cut{color:#b9a9ac;text-decoration:line-through}.w.kw{color:var(--acc2);font-weight:600}.w.ed{background:#e9f8f1}
@@ -120,6 +123,7 @@ details summary{cursor:pointer;font-weight:600;margin:10px 0;color:var(--ink)}
         <div class="tabs" id="tabs"><button data-t="board" class="on">🎬 Storyboard</button><button data-t="words">💬 Words</button><button data-t="look">🎨 Look</button><button data-t="check">✅ Check</button></div>
         <div id="tab-board"></div><div id="tab-words" class="hide"></div><div id="tab-look" class="hide"></div><div id="tab-check" class="hide"></div>
       </div>
+      <div class="card" style="margin-top:14px" id="postCard"></div>
       <div class="card" style="margin-top:14px">
         <h2>Ask for a change</h2>
         <div class="ask"><input id="cmd" placeholder="e.g. “Make the subtitles more dynamic”"><button class="btn pri" id="cmdBtn">Apply</button></div>
@@ -206,8 +210,40 @@ async function doExport(){await post(`/api/projects/${PID}/render`,{final:true})
 $('#exportBtn').onclick=doExport;$('#exportTop').onclick=doExport;
 $('#undoBtn').onclick=async()=>{await post(`/api/projects/${PID}/undo`);try{await waitJob()}catch(e){}setStale(false);await openProject(PID);setVideo('preview');toast('Undone.')};
 
-function renderAll(){renderBoard();renderWords();renderLook();renderCheck();
+function renderAll(){renderBoard();renderWords();renderLook();renderCheck();renderPost();
   $('#dl').innerHTML=`${R.renders.final?`<a href="/media/${PID}/final.mp4?dl=1">⬇ Download video</a><a href="/media/${PID}/final.srt?dl=1">⬇ Subtitles (.srt)</a>`:''}${P.captions.mode==='both'&&R.renders.final?`<a href="/media/${PID}/final.${P.captions.target||'en'}.srt?dl=1">⬇ ${P.captions.target||'en'} subtitles</a>`:''}`;}
+
+
+/* ======================= READY TO POST ======================= */
+let POSTLANG=null;
+function renderPost(){
+  const box=$('#postCard');if(!box)return;const cv=R.covers||{},postd=P.post||{};POSTLANG=POSTLANG||(['ar','en','fr'].includes(P.language)?P.language:'en');
+  const cur=postd[POSTLANG];const LN={ar:'العربية',en:'English',fr:'Français'};
+  box.innerHTML=`<h2 style="margin-top:0">📣 Ready to post</h2>
+    <div class="postgrid"><div>
+      <div class="mini" style="margin-bottom:6px">Cover image</div>
+      ${cv.cover?`<div class="covers"><a href="/media/${PID}/cover.jpg?dl=1&v=${cv.cover}" title="Download the 9:16 cover"><img src="/media/${PID}/cover.jpg?v=${cv.cover}" alt="cover"></a><a href="/media/${PID}/square.jpg?dl=1&v=${cv.square||0}" title="Download the square cover"><img class="sq" src="/media/${PID}/square.jpg?v=${cv.square||0}" alt="square cover"></a></div>
+        <div class="mini">Tap a cover to download it · 9:16 for Reels/TikTok, square for the feed</div>`:'<p class="mini">A cover with your title, made from your video.</p>'}
+      <button class="btn sm" id="coverBtn" style="margin-top:8px">${cv.cover?'↻ Update cover':'🖼 Make the cover'}</button>
+    </div><div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span class="mini" style="flex:1">Post text</span>
+        <select id="postLang" class="sm">${Object.entries(LN).map(([k,v])=>`<option value="${k}" ${k===POSTLANG?'selected':''}>${v}</option>`).join('')}</select></div>
+      <textarea id="postText" dir="auto" rows="8" placeholder="Press “Write it for me” — the caption, a call to action and a short medical disclaimer.">${esc(cur?cur.text:'')}</textarea>
+      <input id="postTags" dir="auto" placeholder="#hashtags" value="${esc(cur?(cur.hashtags||[]).join(' '):'')}">
+      <div class="acts"><button class="btn sm pri" id="postGen">${cur?'↻ Write another':'✨ Write it for me'}</button><button class="btn sm" id="postCopy">📋 Copy text + hashtags</button>
+        ${cur&&cur.by==='template'?'<span class="mini">Simple version — add the Claude key for a custom caption</span>':''}</div>
+    </div></div>`;
+  $('#postLang').onchange=e=>{POSTLANG=e.target.value;renderPost()};
+  $('#postGen').onclick=async()=>{const b=$('#postGen');b.disabled=true;b.textContent='Writing…';
+    try{const r=await post(`/api/projects/${PID}/post`,{lang:POSTLANG});P.post=P.post||{};P.post[POSTLANG]=r;renderPost()}catch(e){b.disabled=false;b.textContent='✨ Write it for me'}};
+  const save=async()=>{const text=$('#postText').value,tags=$('#postTags').value.split(/\s+/).filter(Boolean);
+    try{const r=await post(`/api/projects/${PID}/post`,{lang:POSTLANG,text,hashtags:tags});P.post=P.post||{};P.post[POSTLANG]=r}catch(e){}};
+  $('#postText').onchange=save;$('#postTags').onchange=save;
+  $('#postCopy').onclick=async()=>{const t=($('#postText').value.trim()+'\n\n'+$('#postTags').value.trim()).trim();if(!t)return toast('Write the caption first.');
+    try{await navigator.clipboard.writeText(t);toast('Copied — paste it in Instagram, TikTok or Facebook.')}catch(e){$('#postText').select();document.execCommand('copy');toast('Copied.')}};
+  $('#coverBtn').onclick=async()=>{const b=$('#coverBtn');b.disabled=true;b.textContent='Making the cover…';
+    try{const r=await post(`/api/projects/${PID}/cover`,{});R.covers=r.covers;renderPost();toast('Cover ready — tap it to download.')}catch(e){b.disabled=false;b.textContent='🖼 Make the cover'}};
+}
 
 /* ======================= STORYBOARD ======================= */
 function kindOf(s){const g=s.graphic;if(g.asset==='icons')return'icons';if(g.asset==='photo')return g.fill?'ai':'photo';if(g.asset==='broll')return g.animated?'ai':'broll';return'med'}
