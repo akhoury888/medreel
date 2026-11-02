@@ -86,6 +86,9 @@ details summary{cursor:pointer;font-weight:600;margin:10px 0;color:var(--ink)}
 .insp{margin-top:12px;border:1px solid var(--line);border-radius:12px;padding:12px;background:#fffdfd}
 .insp .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .num{display:flex;align-items:center;gap:4px;margin-top:4px}label.f .num input,.num input{display:inline-block;width:70px;margin:0;padding:6px;border:1px solid var(--line);border-radius:8px;text-align:center}
+.shbtns{display:flex;gap:8px;flex-wrap:wrap}.shb{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 14px 7px 7px;cursor:pointer;font:inherit;font-weight:600;font-size:13px}
+.shb b{width:26px;height:26px;border-radius:50%;background:var(--c);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px}.shb:disabled{opacity:.45;cursor:not-allowed}.shb:not(:disabled):hover{border-color:var(--c)}
+#shNative{width:100%;margin-bottom:8px}
 .postgrid{display:grid;grid-template-columns:240px 1fr;gap:18px}.covers{display:flex;gap:8px;align-items:flex-start}.covers img{width:110px;border-radius:10px;box-shadow:0 6px 16px rgba(0,0,0,.18)}.covers img.sq{width:110px}
 #postText{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit;font-size:14px;resize:vertical}#postTags{width:100%;margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font:inherit;font-size:13px;color:#2563a8}
 @media(max-width:700px){.postgrid{grid-template-columns:1fr}}
@@ -215,6 +218,30 @@ function renderAll(){renderBoard();renderWords();renderLook();renderCheck();rend
 
 
 /* ======================= READY TO POST ======================= */
+const SHARE=[{k:'instagram',n:'Instagram',icon:'◎',c:'#E1306C',url:'https://www.instagram.com/',tip:'Opens Instagram — click “+ Create”, upload the video, paste the caption'},
+  {k:'facebook',n:'Facebook',icon:'f',c:'#1877F2',url:'https://www.facebook.com/',tip:'Opens Facebook — “Photo/video”, upload, paste'},
+  {k:'linkedin',n:'LinkedIn',icon:'in',c:'#0A66C2',url:'https://www.linkedin.com/feed/?shareActive=true',tip:'Opens a new LinkedIn post — add the video, paste'},
+  {k:'tiktok',n:'TikTok',icon:'♪',c:'#111111',url:'https://www.tiktok.com/upload',tip:'Opens TikTok upload — choose the video, paste'},
+  {k:'youtube',n:'YouTube Shorts',icon:'▶',c:'#FF0000',url:'https://studio.youtube.com/',tip:'Opens YouTube Studio — “Create → Upload”, paste'},
+  {k:'whatsapp',n:'WhatsApp',icon:'✆',c:'#25D366',url:'https://web.whatsapp.com/',tip:'Opens WhatsApp Web — attach the video (or post it as a Status from your phone)'}];
+const MOBILE_SHARE=!!(navigator.canShare&&/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)&&navigator.canShare({files:[new File([''],'x.mp4',{type:'video/mp4'})]}));
+function captionText(){const t=($('#postText')?$('#postText').value.trim():''),h=($('#postTags')?$('#postTags').value.trim():'');return (t+(h?'\n\n'+h:'')).trim()}
+async function copyCaption(){const t=captionText();if(!t)return false;try{await navigator.clipboard.writeText(t);return true}catch(e){return false}}
+async function shareTo(k){
+  const x=SHARE.find(y=>y.k===k);if(!x)return;
+  const copied=await copyCaption();
+  const a=document.createElement('a');a.href=`/media/${PID}/final.mp4?dl=1`;a.download='';document.body.appendChild(a);a.click();a.remove();  // the video
+  setTimeout(()=>window.open(x.url,'_blank','noopener'),400);
+  toast((copied?'Caption copied · ':'')+'video downloading · '+x.n+' is opening — upload the video and paste the caption.');
+}
+async function shareNative(){
+  const b=$('#shNative');b.disabled=true;const was=b.textContent;b.textContent='Preparing the video…';
+  try{await copyCaption();const r=await fetch(`/media/${PID}/final.mp4`,{credentials:'same-origin'});const blob=await r.blob();
+    const f=new File([blob],(R.title||'video').replace(/[^\w\u0600-\u06FF -]+/g,'').slice(0,40)+'.mp4',{type:'video/mp4'});
+    await navigator.share({files:[f],text:captionText()});toast('Shared. If the app did not keep the caption, paste it — it is copied.')}
+  catch(e){if(e.name!=='AbortError')toast('Sharing did not work here — use the buttons below.')}
+  b.disabled=false;b.textContent=was}
+
 let POSTLANG=null;
 function renderPost(){
   const box=$('#postCard');if(!box)return;const cv=R.covers||{},postd=P.post||{};POSTLANG=POSTLANG||(['ar','en','fr'].includes(P.language)?P.language:'en');
@@ -232,8 +259,14 @@ function renderPost(){
       <input id="postTags" dir="auto" placeholder="#hashtags" value="${esc(cur?(cur.hashtags||[]).join(' '):'')}">
       <div class="acts"><button class="btn sm pri" id="postGen">${cur?'↻ Write another':'✨ Write it for me'}</button><button class="btn sm" id="postCopy">📋 Copy text + hashtags</button>
         ${cur&&cur.by==='template'?'<span class="mini">Simple version — add the Claude key for a custom caption</span>':''}</div>
-    </div></div>`;
+    </div></div>
+    <div class="share"><div class="mini" style="margin:14px 0 8px">Post it ${R.renders.final?'':'— <b>export the video first</b>'}</div>
+      ${MOBILE_SHARE?`<button class="btn pri" id="shNative" ${R.renders.final?'':'disabled'}>📲 Share to Instagram, TikTok, WhatsApp…</button>`:''}
+      <div class="shbtns">${SHARE.map(x=>`<button class="shb" data-sh="${x.k}" style="--c:${x.c}" ${R.renders.final?'':'disabled'} title="${esc(x.tip)}"><b>${x.icon}</b>${x.n}</button>`).join('')}</div>
+      <div class="mini" style="margin-top:6px">${MOBILE_SHARE?'On your phone, “Share” sends the video straight to the app — the caption is copied, just paste it.':'Each button copies the caption, downloads the video and opens the site — then just upload and paste.'}</div></div>`;
   $('#postLang').onchange=e=>{POSTLANG=e.target.value;renderPost()};
+  $$('[data-sh]').forEach(b=>b.onclick=()=>shareTo(b.dataset.sh));
+  if($('#shNative'))$('#shNative').onclick=shareNative;
   $('#postGen').onclick=async()=>{const b=$('#postGen');b.disabled=true;b.textContent='Writing…';
     try{const r=await post(`/api/projects/${PID}/post`,{lang:POSTLANG});P.post=P.post||{};P.post[POSTLANG]=r;renderPost()}catch(e){b.disabled=false;b.textContent='✨ Write it for me'}};
   const save=async()=>{const text=$('#postText').value,tags=$('#postTags').value.split(/\s+/).filter(Boolean);
