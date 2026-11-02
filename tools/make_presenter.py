@@ -11,6 +11,7 @@ Options: en | fr | ar | lb (Lebanese Arabic)   --new-face (make a different doct
          --audio=/data/presenter/my_voice.m4a   use a real voice recording instead of the AI voice (best for Lebanese)
          --text="..."                           your own script for the AI voice
          --change-voice                         with --audio: turn your recording into another person's voice (same accent and rhythm)
+         --voice-only                           with --audio --change-voice: only change the voice (no face, no fal.ai) -> /data/presenter/<name>_changed.mp3
 Cost: about $1 per 18-second clip (standard) + a few cents for the photo.
 The presenter is AI-generated: label it as such in ads, and never present it as a real doctor or patient testimonial."""
 import base64, json, os, sys, time, urllib.request, urllib.error
@@ -133,5 +134,7 @@ if __name__ == "__main__":
                         "-b:a", "160k", clean], check=True)
         say(f"using your recording: {own}")
         if "--change-voice" in args: clean = change_voice(clean, male)
+        if "--voice-only" in args:
+            say(f"DONE (voice only): {clean}"); sys.exit(0)
     talk(face("--new-face" in args, male), clean if own else voice(lang, text, male), lang, "--pro" in args)
     say(f"finished in {int(time.time() - t0)} s")
